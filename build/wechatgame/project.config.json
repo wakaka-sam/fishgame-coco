@@ -1,0 +1,17 @@
+{
+  "appid": "touristappid",
+  "projectname": "fish-coco-wechatgame",
+  "description": "像素钓鱼微信小游戏版本",
+  "compileType": "game",
+  "libVersion": "3.6.6",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": false,
+    "minified": true,
+    "newFeature": true,
+    "coverView": true,
+    "autoAudits": false
+  },
+  "condition": {}
+}

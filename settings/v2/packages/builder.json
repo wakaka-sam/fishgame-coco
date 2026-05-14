@@ -1,0 +1,17 @@
+{
+  "common": {
+    "buildPath": "build",
+    "outputName": "web-desktop"
+  },
+  "options": {
+    "web-desktop": {
+      "polyfills": {
+        "asyncFunctions": true
+      },
+      "orientation": {
+        "landscapeLeft": true,
+        "landscapeRight": true
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "appid": "wx_your_game_appid",
+  "type": "miniGame",
+  "projectPath": "build/wechatgame",
+  "privateKeyPath": "private.wx_your_game_appid.key",
+  "version": "1.0.0",
+  "desc": "像素钓鱼小游戏版本"
+}
