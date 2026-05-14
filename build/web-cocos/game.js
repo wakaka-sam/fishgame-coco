@@ -185,8 +185,22 @@ const ACCESSORIES = [
 const TOP_BUTTONS = [
   ['shop', '商店'], ['dex', '图鉴'], ['rod', '鱼竿'], ['character', '角色'], ['accessory', '首饰'],
   ['pet', '宠物'], ['rank', '排行'], ['gacha', '抽奖'], ['vip', 'VIP自动'], ['redeem', '兑换'],
-  ['share', '分享'],
+  ['share', '分享'], ['logout', '退出'],
 ];
+const TOP_EMOJI = {
+  shop: '🎁',
+  dex: '📖',
+  rod: '🎣',
+  character: '🧍',
+  accessory: '💍',
+  pet: '🐾',
+  rank: '🏆',
+  gacha: '🎰',
+  vip: '',
+  redeem: '🎫',
+  share: '📤',
+  logout: '',
+};
 const BAIT_IDS = Object.keys(BAITS);
 const TOP_ASSETS = {
   shop: 'ui_shop',
@@ -284,6 +298,10 @@ function activeRod() {
   const selected = RODS.find((r) => r.id === user.rodSkin && dexCount >= r.threshold);
   if (selected) return selected;
   return RODS.filter((r) => dexCount >= r.threshold).pop() || RODS[0];
+}
+function nextRod() {
+  const dexCount = Object.keys(user.dex).length;
+  return RODS.find((r) => dexCount < r.threshold) || null;
 }
 function accessoryEffects() {
   const acc = user.accessories.find((a) => a.uid === user.equippedAccessory);
@@ -525,7 +543,7 @@ function sceneTop() {
 }
 function sceneHeight() {
   const widthHeight = Math.floor(CONTENT_W * 9 / 16);
-  const available = H - sceneTop() - 150;
+  const available = H - sceneTop() - 160;
   return Math.max(150, Math.min(widthHeight, available));
 }
 function drawRect(x, y, w, h, color, stroke) {
@@ -624,6 +642,15 @@ function drawButton(id, label, x, y, w, h, active, data, asset) {
   }
   addTarget(id, x, y, w, h, data);
 }
+function drawOriginalButton(id, icon, label, x, y, w, h, active, data, variant) {
+  const bg = active ? '#ffd700' : (variant === 'vip' ? '#203647' : '#2c3e50');
+  const stroke = variant === 'vip' ? '#66e6ff' : '#ffd700';
+  const fg = active ? '#1a1a2e' : (variant === 'vip' ? '#66e6ff' : '#ffd700');
+  drawRect(x, y, w, h, bg, stroke);
+  const full = icon ? `${icon} ${label}` : label;
+  drawFittedText(full, x + w / 2, y + h / 2, W <= 380 ? 9 : 11, fg, 'center', w - 10);
+  addTarget(id, x, y, w, h, data);
+}
 function drawTopbar() {
   drawRect(CONTENT_X, TOPBAR_Y, CONTENT_W, TOPBAR_H, '#1a1a2e', '#ffd700');
   const userY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H / 2;
@@ -641,41 +668,42 @@ function drawTopbar() {
     const x = CONTENT_X + TOPBAR_PAD_X + col * (bw + ACTION_GAP);
     const y = actionY + row * (ACTION_H + ACTION_GAP);
     const isVip = btn[0] === 'vip';
-    drawRect(x, y, bw, ACTION_H, active ? '#ffd700' : (isVip ? '#263849' : '#2c3e50'), isVip ? '#66e6ff' : '#ffd700');
-    const iconSize = W <= 380 ? 13 : 15;
-    const iconX = x + 4;
-    const iconY = y + (ACTION_H - iconSize) / 2;
-    const hasIcon = drawAsset(TOP_ASSETS[btn[0]], iconX, iconY, iconSize, iconSize);
-    drawFittedText(label, x + bw / 2 + (hasIcon ? 6 : 0), y + ACTION_H / 2, W <= 380 ? 9 : 11, active ? '#1a1a2e' : (isVip ? '#66e6ff' : '#ffd700'), 'center', bw - (hasIcon ? 26 : 8));
-    addTarget('top:' + btn[0], x, y, bw, ACTION_H);
+    drawOriginalButton('top:' + btn[0], TOP_EMOJI[btn[0]], label, x, y, bw, ACTION_H, active, null, isVip ? 'vip' : '');
   });
 }
 function drawScene() {
   const top = sceneTop();
   const h = sceneHeight();
   drawRect(CONTENT_X, top, CONTENT_W, h, '#87ceeb', '#ffd700');
-  const waterY = top + h * .38;
+  const waterY = top + h * .40;
   drawRect(CONTENT_X, waterY, CONTENT_W, h - (waterY - top), '#1e6091');
   ctx.fillStyle = '#26384c';
   ctx.beginPath();
   ctx.moveTo(CONTENT_X, waterY);
-  for (let x = CONTENT_X; x < CONTENT_X + CONTENT_W; x += 24) {
-    ctx.lineTo(x, waterY - 18 - Math.sin(x * .04) * 12);
+  for (let x = CONTENT_X; x <= CONTENT_X + CONTENT_W; x += 20) {
+    const ridge = Math.sin(x * .045) * 16 + Math.sin(x * .017) * 9;
+    ctx.lineTo(x, waterY - 22 - ridge);
   }
   ctx.lineTo(CONTENT_X + CONTENT_W, waterY);
   ctx.fill();
-  for (let y = waterY + 10; y < top + h; y += 9) {
-    ctx.fillStyle = 'rgba(200,240,255,.25)';
-    ctx.fillRect(CONTENT_X + 10, y + Math.sin(Date.now() / 500 + y) * 2, CONTENT_W - 20, 1);
+  for (let y = waterY + 4; y < top + h; y += 7) {
+    ctx.fillStyle = 'rgba(185,225,255,.18)';
+    ctx.fillRect(CONTENT_X + 10, y + Math.sin(Date.now() / 500 + y) * 1.5, CONTENT_W - 20, 1);
+  }
+  for (let i = 0; i < 24; i += 1) {
+    const sx = CONTENT_X + ((i * 57 + Date.now() / 35) % (CONTENT_W - 18)) + 9;
+    const sy = waterY + 20 + ((i * 41) % Math.max(40, h - (waterY - top) - 40));
+    ctx.fillStyle = 'rgba(230,250,255,.65)';
+    ctx.fillRect(sx, sy, i % 3 === 0 ? 4 : 2, 1);
   }
   drawRect(CONTENT_X + CONTENT_W - 62, top + 28, 26, 26, '#ffeb3b');
   const rod = activeRod();
-  const bx = CONTENT_X + CONTENT_W - 45;
-  const by = top + h - 10;
+  const bx = CONTENT_X + CONTENT_W - 46;
+  const by = top + h + 4;
   const tx = CONTENT_X + CONTENT_W * .46 + Math.sin(Date.now() / 600) * 5;
-  const ty = top + h * .30;
+  const ty = top + h * .35;
   ctx.strokeStyle = rod.color;
-  ctx.lineWidth = 7;
+  ctx.lineWidth = 5;
   ctx.beginPath();
   ctx.moveTo(bx, by);
   ctx.lineTo(tx, ty);
@@ -686,31 +714,43 @@ function drawScene() {
   ctx.moveTo(bx, by);
   ctx.lineTo(tx, ty);
   ctx.stroke();
-  if (state.phase !== 'idle') {
-    ctx.strokeStyle = '#dff6ff';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(state.hookX, state.hookY);
-    ctx.stroke();
-    drawRect(state.hookX - 5, state.hookY - 8 + Math.sin(Date.now() / 180) * 3, 10, 10, '#ff5722');
-  }
-  if (!drawCharacterSprite(user.activeCharacter || 'fishing_master', CONTENT_X + CONTENT_W - 98, top + h - 74, 68, 74)) {
+  const hookX = state.phase === 'idle' ? CONTENT_X + CONTENT_W * .50 : state.hookX;
+  const hookY = state.phase === 'idle' ? waterY + 42 : state.hookY;
+  ctx.strokeStyle = '#dff6ff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(hookX, hookY);
+  ctx.stroke();
+  drawRect(hookX - 3, hookY - 5 + Math.sin(Date.now() / 180) * 3, 6, 8, '#ff5722');
+  drawRect(CONTENT_X + CONTENT_W - 130, top + h - 30, 28, 30, '#f2b1aa');
+  drawRect(CONTENT_X + CONTENT_W - 88, top + h - 22, 18, 22, '#f2b1aa');
+  if (!drawCharacterSprite(user.activeCharacter || 'fishing_master', CONTENT_X + CONTENT_W - 90, top + h - 66, 56, 68)) {
     drawRect(CONTENT_X + CONTENT_W - 82, top + h - 28, 26, 26, '#fdbcb4');
     drawRect(CONTENT_X + CONTENT_W - 42, top + h - 20, 18, 18, '#fdbcb4');
   }
 }
 function drawGamebar() {
   const y = sceneTop() + sceneHeight() + 12;
-  drawRect(CONTENT_X, y, CONTENT_W, 98, '#1a1a2e', '#ffd700');
-  drawButton('baitprev', '‹', CONTENT_X + 10, y + 8, 34, 30, false);
-  drawButton('baitnext', '›', CONTENT_X + CONTENT_W - 44, y + 8, 34, 30, false);
-  drawAsset('bait_' + user.currentBait, W / 2 - 92, y + 7, 32, 32);
-  drawText(`当前鱼饵: ${BAITS[user.currentBait].name} (×${user.baits[user.currentBait] || 0})`, W / 2, y + 23, 14, '#e8e8e8', 'center');
+  drawRect(CONTENT_X, y, CONTENT_W, 110, '#1a1a2e', '#ffd700');
+  const bait = BAITS[user.currentBait];
+  const rowY = y + 30;
+  const selectW = Math.min(150, Math.max(126, CONTENT_W * .25));
+  const selectX = W / 2 - selectW / 2;
+  drawText('当前鱼饵:', selectX - 16, rowY, 14, '#e8e8e8', 'right');
+  drawRect(selectX, rowY - 20, selectW, 40, '#2c3e50', '#ffd700');
+  drawAsset('bait_' + user.currentBait, selectX + 10, rowY - 14, 28, 28);
+  drawFittedText(`${bait.name} (×${user.baits[user.currentBait] || 0})`, selectX + 46, rowY, 13, '#ffd700', 'left', selectW - 64);
+  drawText('⌄', selectX + selectW - 14, rowY, 13, '#e8e8e8', 'center');
+  drawText(`剩余 ${user.baits[user.currentBait] || 0} 个`, selectX + selectW + 28, rowY, 14, '#e8e8e8', 'left');
+  addTarget('baitprev', selectX, rowY - 20, selectW / 2, 40);
+  addTarget('baitnext', selectX + selectW / 2, rowY - 20, selectW / 2, 40);
   const rod = activeRod();
-  drawAsset('rod_' + rod.id, W / 2 - 118, y + 35, 28, 28);
-  drawText(`🎣 ${rod.name} · 图鉴 ${Object.keys(user.dex).length} 种`, W / 2, y + 50, 13, '#4ec9b0', 'center');
-  drawText(status, W / 2, y + 72, 13, '#4ec9b0', 'center');
+  const upcoming = nextRod();
+  const dexCount = Object.keys(user.dex).length;
+  const rodLine = upcoming ? `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}  下一把: ${upcoming.name} (${dexCount}/${upcoming.threshold})` : `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}`;
+  drawFittedText(rodLine, W / 2, y + 67, 12, '#d8c98a', 'center', CONTENT_W - 42);
+  drawFittedText(status, W / 2, y + 91, 13, '#4ec9b0', 'center', CONTENT_W - 36);
 }
 function drawHitbar() {
   if (!hb.active) return;
@@ -1066,6 +1106,12 @@ function handleAction(t) {
     if (type === 'vip') {
       user.vipAuto = !user.vipAuto;
       status = user.vipAuto ? 'VIP自动钓鱼已开启' : 'VIP自动钓鱼已关闭';
+      saveUser();
+    } else if (type === 'logout') {
+      user = freshUser();
+      state.phase = 'idle';
+      modal = null;
+      status = '已退出，使用本地默认玩家继续';
       saveUser();
     } else {
       modal = { type };
