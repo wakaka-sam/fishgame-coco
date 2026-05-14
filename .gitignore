@@ -7,6 +7,7 @@ private*.key
 
 # Generated archives and local logs
 *.zip
+wechat-preview-qrcode.*
 *.log
 npm-debug.log*
 yarn-debug.log*

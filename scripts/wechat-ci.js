@@ -29,6 +29,7 @@ try {
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const projectPath = path.resolve(root, config.projectPath || 'build/wechatgame');
 const privateKeyPath = path.resolve(root, config.privateKeyPath || '');
+const qrcodeOutputDest = path.resolve(root, config.qrcodeOutputDest || 'wechat-preview-qrcode.jpg');
 
 if (!config.appid || config.appid === 'wx_your_game_appid') fail('Please set appid in wechat-ci.config.json');
 if (!fs.existsSync(projectPath)) fail(`Missing projectPath: ${projectPath}`);
@@ -54,11 +55,12 @@ async function main() {
       project,
       desc: config.desc || 'preview',
       setting,
-      qrcodeFormat: config.qrcodeFormat || 'terminal',
-      qrcodeOutputDest: config.qrcodeOutputDest,
+      qrcodeFormat: config.qrcodeFormat || 'image',
+      qrcodeOutputDest,
       onProgressUpdate: console.log,
     });
     console.log(result);
+    console.log(`Preview QR code: ${qrcodeOutputDest}`);
     return;
   }
 

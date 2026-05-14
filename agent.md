@@ -10,7 +10,7 @@ This project is a Cocos Creator 3.8 LTS port plus runnable Web and WeChat Mini G
 - `build/web-desktop/`: runnable Web version. It intentionally preserves the original project's UI, art style, top tabs, button positions, dialogs, and interactions.
 - `build/wechatgame/`: runnable WeChat Mini Game package. This is the package used by WeChat Developer Tools and `miniprogram-ci`.
 - `scripts/generate-wechat-assets.js`: generates missing WeChat PNG icon assets.
-- `scripts/wechat-ci.js`: wraps `miniprogram-ci` for preview/upload.
+- `scripts/wechat-ci.js`: wraps `miniprogram-ci` for preview/upload. Preview generates `wechat-preview-qrcode.jpg` by default.
 - `wechat-ci.config.example.json`: template for local WeChat CI config.
 - `wechat-ci.config.json`: local-only config. Do not commit it.
 - `private*.key`: local-only WeChat upload private key. Do not commit it.
@@ -84,7 +84,13 @@ zip -qr fish-coco-wechatgame.zip build/wechatgame package.json scripts wechat-ci
 npm run wechat:preview
 ```
 
-This command must be run after the package is updated. If it fails, report the exact error and the likely cause. Common causes include missing `wechat-ci.config.json`, invalid `appid`, missing `privateKeyPath`, IP allowlist problems, or `miniprogram-ci` compiler timeout.
+This command must be run after the package is updated. It generates `wechat-preview-qrcode.jpg` by default. After it succeeds, the agent must send the QR code image to the user in the final response, for example:
+
+```markdown
+![微信预览二维码](/absolute/path/to/wechat-preview-qrcode.jpg)
+```
+
+If preview fails, report the exact error and the likely cause. Common causes include missing `wechat-ci.config.json`, invalid `appid`, missing `privateKeyPath`, IP allowlist problems, or `miniprogram-ci` compiler timeout.
 
 ## Upload
 
@@ -105,6 +111,7 @@ Commit source and generated WeChat/Web package files that are needed to run the 
 - `private*.key`
 - `*.pem`
 - `*.zip`
+- `wechat-preview-qrcode.*`
 - editor caches or local temporary files
 
 Before committing:
@@ -114,4 +121,3 @@ git status --short
 ```
 
 Check that no local credentials or private keys are staged.
-
