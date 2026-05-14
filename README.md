@@ -1,17 +1,29 @@
 # Fish Coco
 
-这是从 `/Volumes/bigger/testspace/fishing-game` 转换出的 Cocos Creator 3.8 LTS 工程骨架和可运行 Web 包。
+这是从 `/Volumes/bigger/testspace/fishing-game` 转换出的 Cocos Creator 3.8 LTS 工程骨架，以及一套同源运行时输出的 Web / 微信小游戏包。
 
 ## 目录
 
 - `assets/scripts/FishingGame.ts`: Cocos Creator 3.8 主组件，包含钓鱼状态机、命中条、经济与图鉴逻辑。
 - `assets/scripts/game-data.ts`: 从原项目抽出的鱼饵、鱼、稀有度、鱼竿与抽取逻辑。
 - `assets/resources/characters`: 原项目角色贴图资源。
+- `src/runtime/game.js`: Web 与微信小游戏共用的单一 Canvas 运行时源。改 UI/交互时优先改这里。
+- `build/web-cocos`: 由 `src/runtime/game.js` 生成的 Web 版本，使用 `wx-web-shim.js` 适配浏览器。
+- `build/wechatgame`: 由 `src/runtime/game.js` 生成的微信小游戏版本。
 - `build/web-desktop`: 已输出的静态 Web 版本，可直接部署或本地访问。该版本直接复用原项目的 `index.html`、`style.css`、`data.js`、`game.js` 和图片资源，以保持原始美术风格、顶部 tab、按钮位置、弹窗和命中条交互一致；`local-api-shim.js` 负责把原服务端 API 转为浏览器本地存档。
+
+## 构建统一 Web / 微信运行时
+
+```bash
+npm run build:unified
+```
+
+该命令会把 `src/runtime/game.js` 同步到 `build/wechatgame/game.js`，并生成 `build/web-cocos`。这样 Web 与微信小游戏运行同一套 UI 和交互逻辑。
 
 ## 运行 Web 版本
 
 ```bash
+npm run build:unified
 npm run serve:web
 ```
 

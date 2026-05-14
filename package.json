@@ -6,6 +6,7 @@
     "version": "3.8.0"
   },
   "scripts": {
+    "build:unified": "node scripts/build-unified.js",
     "serve:web": "node web-server.js",
     "wechat:preview": "node scripts/wechat-ci.js preview",
     "wechat:upload": "node scripts/wechat-ci.js upload"

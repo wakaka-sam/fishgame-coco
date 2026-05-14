@@ -7,9 +7,12 @@ This project is a Cocos Creator 3.8 LTS port plus runnable Web and WeChat Mini G
 - `assets/scripts/FishingGame.ts`: Cocos Creator game component and portable gameplay logic.
 - `assets/scripts/game-data.ts`: shared bait, fish, rarity, rod, character, pet, accessory, and gacha data.
 - `assets/resources/characters/`: character sprite resources used by the Cocos project.
-- `build/web-desktop/`: runnable Web version. It intentionally preserves the original project's UI, art style, top tabs, button positions, dialogs, and interactions.
-- `build/wechatgame/`: runnable WeChat Mini Game package. This is the package used by WeChat Developer Tools and `miniprogram-ci`.
+- `src/runtime/game.js`: the single runtime source for both Web and WeChat Mini Game. Make UI and interaction changes here first.
+- `build/web-cocos/`: generated Web build that runs the same runtime through `wx-web-shim.js`.
+- `build/web-desktop/`: legacy DOM Web version kept for reference against the original project.
+- `build/wechatgame/`: generated WeChat Mini Game package. This is the package used by WeChat Developer Tools and `miniprogram-ci`.
 - `scripts/generate-wechat-assets.js`: generates missing WeChat PNG icon assets.
+- `scripts/build-unified.js`: builds the single-runtime Web and WeChat outputs from `src/runtime/game.js`.
 - `scripts/wechat-ci.js`: wraps `miniprogram-ci` for preview/upload. Preview generates `wechat-preview-qrcode.jpg` by default.
 - `wechat-ci.config.example.json`: template for local WeChat CI config.
 - `wechat-ci.config.json`: local-only config. Do not commit it.
@@ -26,6 +29,7 @@ Do not commit `node_modules/`.
 ## Run Web Version
 
 ```bash
+npm run build:unified
 npm run serve:web
 ```
 
@@ -60,25 +64,35 @@ The private key must be downloaded from the WeChat public platform, and the uplo
 
 After any code or asset change, the agent must do all of the following before reporting completion:
 
-1. Validate JavaScript syntax for the WeChat package:
+1. Build the unified Web and WeChat runtime outputs:
 
 ```bash
+npm run build:unified
+```
+
+2. Validate JavaScript syntax for the shared and generated packages:
+
+```bash
+node --check src/runtime/game.js
+node --check build/web-cocos/wx-web-shim.js
 node --check build/wechatgame/game.js
 ```
 
-2. Regenerate WeChat icon assets if data, fish, bait, rod, pet, accessory, character, shop, gacha, or dex visuals changed:
+3. Regenerate WeChat icon assets if data, fish, bait, rod, pet, accessory, character, shop, gacha, or dex visuals changed:
 
 ```bash
 node scripts/generate-wechat-assets.js
+npm run build:unified
 ```
 
-3. Rebuild the distributable WeChat Mini Game archive:
+4. Rebuild the distributable Web and WeChat archives:
 
 ```bash
+zip -qr fish-coco-web.zip build/web-cocos web-server.js README.md package.json agent.md
 zip -qr fish-coco-wechatgame.zip build/wechatgame package.json scripts wechat-ci.config.example.json README.md agent.md
 ```
 
-4. Generate a WeChat preview QR code:
+5. Generate a WeChat preview QR code:
 
 ```bash
 npm run wechat:preview

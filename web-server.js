@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const root = path.join(__dirname, 'build', 'web-desktop');
+const root = path.resolve(__dirname, process.env.WEB_ROOT || path.join('build', 'web-cocos'));
 const port = Number(process.env.PORT || 4173);
 const types = {
   '.html': 'text/html; charset=utf-8',
