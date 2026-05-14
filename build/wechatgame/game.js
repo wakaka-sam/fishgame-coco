@@ -9,6 +9,8 @@ ctx.scale(DPR, DPR);
 const W = sys.windowWidth;
 const H = sys.windowHeight;
 const SAVE_KEY = 'fish-coco-wechatgame-save';
+const PLAYER_ID_KEY = 'fish-coco-player-id';
+const API_BASE = 'https://fishapi.wakaka007.cn';
 const MINI_SAFE_TOP = Math.max(
   0,
   sys.statusBarHeight || 0,
@@ -24,8 +26,67 @@ const ACTION_COLS = W <= 700 ? 5 : 6;
 const ACTION_GAP = W <= 380 ? 3 : 4;
 const ACTION_H = W <= 380 ? 27 : 30;
 const USER_ROW_H = 26;
-const ACTION_ROWS = Math.ceil(11 / ACTION_COLS);
+const DEBUG_LOG_ENABLED = detectDebugLogEnabled();
+const ACTION_BUTTON_COUNT = 12 + (DEBUG_LOG_ENABLED ? 1 : 0);
+const ACTION_ROWS = Math.ceil(ACTION_BUTTON_COUNT / ACTION_COLS);
 const TOPBAR_H = TOPBAR_PAD_Y * 2 + USER_ROW_H + 6 + ACTION_ROWS * ACTION_H + (ACTION_ROWS - 1) * ACTION_GAP;
+const DEBUG_LOG_LIMIT = 160;
+const debugLogs = [];
+let logScroll = 0;
+
+function detectDebugLogEnabled() {
+  try {
+    if (wx.getAccountInfoSync) {
+      const info = wx.getAccountInfoSync();
+      const env = info && info.miniProgram && info.miniProgram.envVersion;
+      if (env) return env !== 'release';
+    }
+  } catch (_) {}
+  try {
+    if (typeof __wxConfig !== 'undefined' && __wxConfig.envVersion) return __wxConfig.envVersion !== 'release';
+  } catch (_) {}
+  try {
+    if (typeof location !== 'undefined') return /[?&]debugLogs=1(?:&|$)/.test(location.search);
+  } catch (_) {}
+  return false;
+}
+function compactLogValue(value) {
+  if (value instanceof Error) return `${value.name}: ${value.message}`;
+  if (typeof value === 'string') return value;
+  try {
+    const text = JSON.stringify(value);
+    return text.length > 300 ? text.slice(0, 300) + '...' : text;
+  } catch (_) {
+    return String(value);
+  }
+}
+function addDebugLog(level, parts) {
+  if (!DEBUG_LOG_ENABLED) return;
+  const now = new Date();
+  const time = [
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join(':');
+  debugLogs.push({ time, level, text: parts.map(compactLogValue).join(' ') });
+  if (debugLogs.length > DEBUG_LOG_LIMIT) debugLogs.shift();
+  logScroll = Math.max(0, Math.min(logScroll, Math.max(0, debugLogs.length - 1)));
+}
+function installDebugLogCapture() {
+  if (!DEBUG_LOG_ENABLED || typeof console === 'undefined' || console.__fishDebugLogCapture) return;
+  ['log', 'info', 'warn', 'error'].forEach((level) => {
+    const original = console[level] && console[level].bind(console);
+    if (!original) return;
+    console[level] = (...args) => {
+      addDebugLog(level, args);
+      original(...args);
+    };
+  });
+  console.__fishDebugLogCapture = true;
+  if (wx.onError) wx.onError((message) => addDebugLog('error', ['wx.onError', message]));
+  if (wx.onUnhandledRejection) wx.onUnhandledRejection((res) => addDebugLog('error', ['unhandledRejection', res && (res.reason || res)]));
+  addDebugLog('info', ['debug log enabled']);
+}
 
 const RARITY_NAME = {
   trash: '垃圾',
@@ -36,6 +97,7 @@ const RARITY_NAME = {
   treasure: '宝藏',
   limited: '限定',
   rod_exclusive: '鱼竿专属',
+  character_shard: '角色碎片',
 };
 const RARITY_COLOR = {
   trash: '#888888',
@@ -46,6 +108,7 @@ const RARITY_COLOR = {
   treasure: '#ff8c42',
   limited: '#ff7ac8',
   rod_exclusive: '#ff4500',
+  character_shard: '#f59e0b',
 };
 const HITS_BY_RARITY = {
   trash: 1,
@@ -56,83 +119,147 @@ const HITS_BY_RARITY = {
   treasure: 4,
   limited: 4,
   rod_exclusive: 5,
+  character_shard: 5,
 };
 const BAITS = {
   worm: {
     name: '蚯蚓',
     price: 10,
-    color: '#8b4513',
     desc: '入门鱼饵，能钓到些小鱼小虾',
+    color: '#8b4513',
     fishes: [
-      ['sardine', '沙丁鱼', 'common', 0.05, 0.3, 30, '鱼'],
-      ['crucian_s', '小鲫鱼', 'common', 0.1, 0.6, 25, '鱼'],
-      ['tadpole', '蝌蚪', 'common', 0.01, 0.05, 200, '蛙'],
-      ['catfish_s', '小鲶鱼', 'rare', 0.5, 2, 60, '鲶'],
-      ['eel_s', '小鳗鱼', 'rare', 0.3, 1.2, 100, '鳗'],
-      ['koi', '锦鲤', 'legendary', 2, 5, 400, '锦'],
-      ['old_turtle', '千年龟', 'legendary', 5, 15, 250, '龟'],
-      ['mud_dragon', '泥龙', 'hidden', 10, 30, 800, '龙'],
+      { id: 'sardine',     name: '沙丁鱼',   rarity: 'common',    minW: 0.05, maxW: 0.3,  price: 30,   icon: '🐟' },
+      { id: 'crucian_s',   name: '小鲫鱼',   rarity: 'common',    minW: 0.1,  maxW: 0.6,  price: 25,   icon: '🐟' },
+      { id: 'tadpole',     name: '蝌蚪',     rarity: 'common',    minW: 0.01, maxW: 0.05, price: 200,  icon: '🐸' },
+      { id: 'minnow',      name: '米诺鱼',   rarity: 'common',    minW: 0.05, maxW: 0.2,  price: 40,   icon: '🐠' },
+      { id: 'frog',        name: '青蛙',     rarity: 'common',    minW: 0.1,  maxW: 0.4,  price: 50,   icon: '🐸' },
+      { id: 'catfish_s',   name: '小鲶鱼',   rarity: 'rare',      minW: 0.5,  maxW: 2,    price: 60,   icon: '🐡' },
+      { id: 'eel_s',       name: '小鳗鱼',   rarity: 'rare',      minW: 0.3,  maxW: 1.2,  price: 100,  icon: '🐍' },
+      { id: 'crucian_k',   name: '鲫鱼王',   rarity: 'rare',      minW: 1,    maxW: 3,    price: 80,   icon: '🐟' },
+      { id: 'dawn_carp',   name: '晨曦鲤',   rarity: 'rare',      minW: 0.8,  maxW: 2.5,  price: 150,  icon: '🎏', timeSlot: 'morning' },
+      { id: 'dusk_catfish', name: '暮光鲶',   rarity: 'rare',      minW: 1,    maxW: 3,    price: 120,  icon: '🐡', timeSlot: 'afternoon' },
+      { id: 'glow_eel',    name: '夜光鳗',   rarity: 'rare',      minW: 0.5,  maxW: 1.8,  price: 200,  icon: '🐍', timeSlot: 'night' },
+      { id: 'koi',         name: '锦鲤',     rarity: 'legendary', minW: 2,    maxW: 5,    price: 400,  icon: '🎏' },
+      { id: 'old_turtle',  name: '千年龟',   rarity: 'legendary', minW: 5,    maxW: 15,   price: 250,  icon: '🐢' },
+      { id: 'mud_dragon',  name: '泥龙',     rarity: 'hidden',    minW: 10,   maxW: 30,   price: 800,  icon: '🐉' },
     ],
   },
   shrimp: {
     name: '鲜虾',
     price: 50,
-    color: '#ff7f7f',
     desc: '海钓鱼饵，能引来肉食鱼',
+    color: '#ff7f7f',
     fishes: [
-      ['mackerel', '鲭鱼', 'common', 0.5, 1.5, 60, '鲭'],
-      ['squid_s', '小鱿鱼', 'common', 0.3, 1, 90, '鱿'],
-      ['crab', '螃蟹', 'common', 0.2, 1, 120, '蟹'],
-      ['tuna_s', '小金枪鱼', 'rare', 2, 6, 200, '枪'],
-      ['octopus', '章鱼', 'rare', 1, 4, 250, '章'],
-      ['sword', '剑鱼', 'legendary', 10, 30, 600, '剑'],
-      ['kraken_baby', '幼海妖', 'hidden', 20, 60, 1500, '妖'],
+      { id: 'mackerel',    name: '鲭鱼',     rarity: 'common',    minW: 0.5,  maxW: 1.5,  price: 60,   icon: '🐟' },
+      { id: 'flounder_s',  name: '小比目鱼', rarity: 'common',    minW: 0.4,  maxW: 1.2,  price: 80,   icon: '🐠' },
+      { id: 'squid_s',     name: '小鱿鱼',   rarity: 'common',    minW: 0.3,  maxW: 1,    price: 90,   icon: '🦑' },
+      { id: 'snapper',     name: '红鲷',     rarity: 'common',    minW: 0.5,  maxW: 2,    price: 70,   icon: '🐟' },
+      { id: 'crab',        name: '螃蟹',     rarity: 'common',    minW: 0.2,  maxW: 1,    price: 120,  icon: '🦀' },
+      { id: 'tuna_s',      name: '小金枪鱼', rarity: 'rare',      minW: 2,    maxW: 6,    price: 200,  icon: '🐟' },
+      { id: 'octopus',     name: '章鱼',     rarity: 'rare',      minW: 1,    maxW: 4,    price: 250,  icon: '🐙' },
+      { id: 'lobster',     name: '龙虾',     rarity: 'rare',      minW: 0.5,  maxW: 2,    price: 400,  icon: '🦞' },
+      { id: 'dawn_crab',   name: '朝霞蟹',   rarity: 'rare',      minW: 0.3,  maxW: 1.5,  price: 300,  icon: '🦀', timeSlot: 'morning' },
+      { id: 'sunset_ray',  name: '落日鳐',   rarity: 'rare',      minW: 2,    maxW: 8,    price: 280,  icon: '🐠', timeSlot: 'afternoon' },
+      { id: 'moon_jelly',  name: '月光水母', rarity: 'rare',      minW: 0.5,  maxW: 3,    price: 350,  icon: '🪼', timeSlot: 'night' },
+      { id: 'sword',       name: '剑鱼',     rarity: 'legendary', minW: 10,   maxW: 30,   price: 600,  icon: '🗡️' },
+      { id: 'manta',       name: '蝠鲼',     rarity: 'legendary', minW: 15,   maxW: 50,   price: 500,  icon: '🐠' },
+      { id: 'kraken_baby', name: '幼海妖',   rarity: 'hidden',    minW: 20,   maxW: 60,   price: 1500, icon: '🦑' },
     ],
   },
   lure: {
     name: '亮片假饵',
     price: 200,
-    color: '#c0c0c0',
     desc: '吸引深海大鱼',
+    color: '#c0c0c0',
     fishes: [
-      ['bass', '鲈鱼', 'common', 1, 4, 150, '鲈'],
-      ['salmon', '三文鱼', 'common', 2, 6, 200, '鲑'],
-      ['shark_s', '小鲨鱼', 'rare', 8, 25, 350, '鲨'],
-      ['marlin_s', '小马林鱼', 'rare', 5, 20, 400, '马'],
-      ['megalodon_b', '幼巨齿鲨', 'legendary', 30, 80, 800, '齿'],
-      ['leviathan_s', '幼海蛇神', 'hidden', 80, 300, 2000, '蛇'],
+      { id: 'bass',        name: '鲈鱼',     rarity: 'common',    minW: 1,    maxW: 4,    price: 150,  icon: '🐟' },
+      { id: 'pike',        name: '梭鱼',     rarity: 'common',    minW: 2,    maxW: 5,    price: 120,  icon: '🐠' },
+      { id: 'salmon',      name: '三文鱼',   rarity: 'common',    minW: 2,    maxW: 6,    price: 200,  icon: '🐟' },
+      { id: 'trout',       name: '鳟鱼',     rarity: 'common',    minW: 1,    maxW: 3,    price: 180,  icon: '🐟' },
+      { id: 'walleye',     name: '梭鲈',     rarity: 'common',    minW: 1.5,  maxW: 4,    price: 220,  icon: '🐠' },
+      { id: 'marlin_s',    name: '小马林鱼', rarity: 'rare',      minW: 5,    maxW: 20,   price: 400,  icon: '🗡️' },
+      { id: 'shark_s',     name: '小鲨鱼',   rarity: 'rare',      minW: 8,    maxW: 25,   price: 350,  icon: '🦈' },
+      { id: 'barracuda',   name: '梭子鱼',   rarity: 'rare',      minW: 3,    maxW: 10,   price: 500,  icon: '🐟' },
+      { id: 'dawn_sword',  name: '破晓旗鱼', rarity: 'rare',      minW: 5,    maxW: 15,   price: 450,  icon: '🐟', timeSlot: 'morning' },
+      { id: 'dusk_shark',  name: '黄昏鲨',   rarity: 'rare',      minW: 10,   maxW: 30,   price: 400,  icon: '🦈', timeSlot: 'afternoon' },
+      { id: 'abyss_lantern', name: '深渊灯笼鱼', rarity: 'rare',  minW: 2,    maxW: 8,    price: 600,  icon: '🏮', timeSlot: 'night' },
+      { id: 'megalodon_b', name: '幼巨齿鲨', rarity: 'legendary', minW: 30,   maxW: 80,   price: 800,  icon: '🦈' },
+      { id: 'whale_s',     name: '小鲸',     rarity: 'legendary', minW: 50,   maxW: 200,  price: 600,  icon: '🐋' },
+      { id: 'leviathan_s', name: '幼海蛇神', rarity: 'hidden',    minW: 80,   maxW: 300,  price: 2000, icon: '🐉' },
     ],
   },
   magic: {
     name: '魔法鱼饵',
     price: 1000,
-    color: '#c586c0',
     desc: '神秘鱼饵，能召唤奇异生物',
+    color: '#c586c0',
     fishes: [
-      ['coelacanth', '腔棘鱼', 'common', 5, 20, 500, '棘'],
-      ['crystal', '水晶鱼', 'rare', 1, 5, 4000, '晶'],
-      ['siren', '人鱼', 'rare', 40, 80, 1500, '人'],
-      ['phoenix_f', '凤凰鱼', 'legendary', 5, 20, 5000, '凤'],
-      ['kraken', '海妖王', 'legendary', 100, 500, 1500, '王'],
-      ['leviathan', '海蛇神', 'hidden', 200, 1000, 8000, '神'],
+      { id: 'coelacanth',  name: '腔棘鱼',   rarity: 'common',    minW: 5,    maxW: 20,   price: 500,  icon: '🐟' },
+      { id: 'angler',      name: '深海琵琶', rarity: 'common',    minW: 3,    maxW: 10,   price: 600,  icon: '🐠' },
+      { id: 'hatchet',     name: '斧鱼',     rarity: 'common',    minW: 0.5,  maxW: 2,    price: 1200, icon: '🐟' },
+      { id: 'gulper',      name: '吞噬鳗',   rarity: 'common',    minW: 2,    maxW: 8,    price: 800,  icon: '🐍' },
+      { id: 'oarfish',     name: '皇带鱼',   rarity: 'common',    minW: 10,   maxW: 50,   price: 400,  icon: '🐍' },
+      { id: 'siren',       name: '人鱼',     rarity: 'rare',      minW: 40,   maxW: 80,   price: 1500, icon: '🧜' },
+      { id: 'sea_ghost',   name: '海妖',     rarity: 'rare',      minW: 20,   maxW: 60,   price: 2000, icon: '👻' },
+      { id: 'crystal',     name: '水晶鱼',   rarity: 'rare',      minW: 1,    maxW: 5,    price: 4000, icon: '💎' },
+      { id: 'dew_fairy',   name: '仙露鱼',   rarity: 'rare',      minW: 3,    maxW: 12,   price: 3000, icon: '🧚', timeSlot: 'morning' },
+      { id: 'solar_ray',   name: '日炎蝶鱼', rarity: 'rare',      minW: 2,    maxW: 8,    price: 3500, icon: '🦋', timeSlot: 'afternoon' },
+      { id: 'star_horse',  name: '星辰海马', rarity: 'rare',      minW: 1,    maxW: 6,    price: 5000, icon: '🐴', timeSlot: 'night' },
+      { id: 'phoenix_f',   name: '凤凰鱼',   rarity: 'legendary', minW: 5,    maxW: 20,   price: 5000, icon: '🔥' },
+      { id: 'kraken',      name: '海妖王',   rarity: 'legendary', minW: 100,  maxW: 500,  price: 1500, icon: '🦑' },
+      { id: 'leviathan',   name: '海蛇神',   rarity: 'hidden',    minW: 200,  maxW: 1000, price: 8000, icon: '🐉' },
     ],
   },
   divine: {
     name: '神仙鱼饵',
     price: 10000,
     currency: 'diamonds',
+    desc: '仙气缭绕的鱼饵，只会钓到传说级和隐藏级的鱼，也可通过钓鱼极低概率获得',
     color: '#ffd700',
-    desc: '只会钓到传说级和隐藏级的鱼',
+    specialOnly: true,
     fishes: [
-      ['koi', '锦鲤', 'legendary', 2, 5, 400, '锦'],
-      ['phoenix_f', '凤凰鱼', 'legendary', 5, 20, 5000, '凤'],
-      ['leviathan', '海蛇神', 'hidden', 200, 1000, 8000, '神'],
+      { id: 'koi',         name: '锦鲤',     rarity: 'legendary', minW: 2,    maxW: 5,    price: 400,  icon: '🎏' },
+      { id: 'old_turtle',  name: '千年龟',   rarity: 'legendary', minW: 5,    maxW: 15,   price: 250,  icon: '🐢' },
+      { id: 'mud_dragon',  name: '泥龙',     rarity: 'hidden',    minW: 10,   maxW: 30,   price: 800,  icon: '🐉' },
+      { id: 'sword',       name: '剑鱼',     rarity: 'legendary', minW: 10,   maxW: 30,   price: 600,  icon: '🗡️' },
+      { id: 'manta',       name: '蝠鲼',     rarity: 'legendary', minW: 15,   maxW: 50,   price: 500,  icon: '🐠' },
+      { id: 'kraken_baby', name: '幼海妖',   rarity: 'hidden',    minW: 20,   maxW: 60,   price: 1500, icon: '🦑' },
+      { id: 'megalodon_b', name: '幼巨齿鲨', rarity: 'legendary', minW: 30,   maxW: 80,   price: 800,  icon: '🦈' },
+      { id: 'whale_s',     name: '小鲸',     rarity: 'legendary', minW: 50,   maxW: 200,  price: 600,  icon: '🐋' },
+      { id: 'leviathan_s', name: '幼海蛇神', rarity: 'hidden',    minW: 80,   maxW: 300,  price: 2000, icon: '🐉' },
+      { id: 'phoenix_f',   name: '凤凰鱼',   rarity: 'legendary', minW: 5,    maxW: 20,   price: 5000, icon: '🔥' },
+      { id: 'kraken',      name: '海妖王',   rarity: 'legendary', minW: 100,  maxW: 500,  price: 1500, icon: '🦑' },
+      { id: 'leviathan',   name: '海蛇神',   rarity: 'hidden',    minW: 200,  maxW: 1000, price: 8000, icon: '🐉' },
+    ],
+  },
+  jb: {
+    name: 'JB鱼饵',
+    dexName: '角色碎片',
+    price: 0,
+    purchasable: false,
+    desc: '钓鱼时额外获得的特殊鱼饵，只会钓到角色碎片',
+    color: '#f59e0b',
+    specialOnly: true,
+    characterShardOnly: true,
+    hideDex: true,
+    fishes: [],
+  },
+  black_silk: {
+    name: '黑丝饵',
+    dexName: '黑丝图鉴',
+    price: 0,
+    purchasable: false,
+    desc: '已停止新增获取的特殊鱼饵，现存鱼饵仍可使用，只会钓到黑丝图鉴限定鱼',
+    color: '#ff7ac8',
+    specialOnly: true,
+    fishes: [
+      { id: 'candy_fish',      name: '糖果鱼', rarity: 'limited', minW: 1, maxW: 1, diamondValue: 100, icon: '🍬' },
+      { id: 'black_silk_fish', name: '黑丝鱼', rarity: 'limited', minW: 1, maxW: 1, diamondValue: 100, icon: '🖤' },
+      { id: 'water_fish',      name: '水鱼',   rarity: 'limited', minW: 1, maxW: 1, diamondValue: 100, icon: '💧' },
+      { id: 'big_goldfish',    name: '大金鱼', rarity: 'limited', minW: 1, maxW: 1, diamondValue: 100, icon: '🐠' },
     ],
   },
 };
-Object.values(BAITS).forEach((bait) => {
-  bait.fishes = bait.fishes.map(([id, name, rarity, minW, maxW, price, icon]) => ({ id, name, rarity, minW, maxW, price, icon }));
-});
 const TRASH = [
   { id: 'boot', name: '破靴子', rarity: 'trash', value: 0, icon: '靴' },
   { id: 'bottle', name: '空瓶', rarity: 'trash', value: 0, icon: '瓶' },
@@ -160,6 +287,25 @@ const GACHA_RODS = [
   { id: 'headphone', name: '耳机竿', icon: '耳', color: '#1a1a2e', hi: '#00d4ff', desc: '钻石抽奖第二期' },
   { id: 'candy', name: 'Candy竿', icon: '糖', color: '#ff69b4', hi: '#fff0f5', desc: '钻石抽奖第二期' },
 ];
+const ROD_FISH = {
+  candy: [
+    { id: 'candy_horse', name: '糖果海马', rarity: 'rod_exclusive', minW: 10, maxW: 200, price: 0, icon: '马', rodId: 'candy' },
+    { id: 'candy_dog', name: '糖果犬鱼', rarity: 'rod_exclusive', minW: 10, maxW: 200, price: 0, icon: '犬', rodId: 'candy' },
+  ],
+  headphone: [
+    { id: 'maple_fish', name: '枫叶鱼', rarity: 'rod_exclusive', minW: 10, maxW: 200, price: 0, icon: '枫', rodId: 'headphone' },
+  ],
+  firekirin: [
+    { id: 'fire_beast', name: '火焰兽', rarity: 'rod_exclusive', minW: 10, maxW: 200, price: 0, icon: '火', rodId: 'firekirin' },
+  ],
+  greenxuanwu: [
+    { id: 'jade_turtle', name: '翡翠龟', rarity: 'rod_exclusive', minW: 10, maxW: 200, price: 0, icon: '龟', rodId: 'greenxuanwu' },
+  ],
+};
+const ALL_ROD_FISH = Object.values(ROD_FISH).flat();
+const DIAMOND_JACKPOT_CHANCE = 0.01;
+const DIVINE_BAIT_DROP_CHANCE = 0.0001;
+const JB_BAIT_DROP_CHANCE = 0.05;
 const CHARACTERS = [
   { id: 'fishing_master', name: '钓鱼高手', icon: '钓', desc: '初始角色', title: '码头上的老练新星' },
   { id: 'phoebe_cupid', name: '菲比丘比', icon: '菲', desc: '碎片合成', title: '隐海修会的祈光者' },
@@ -168,24 +314,24 @@ const CHARACTERS = [
   { id: 'teemo', name: '提莫', icon: '提', desc: '碎片合成', title: '草丛旁的巡湖斥候' },
 ];
 const PETS = [
-  { id: 'cat', name: '小猫咪', icon: '猫', bonus: '金币+10' },
-  { id: 'dog', name: '小狗狗', icon: '狗', bonus: '金币+10' },
-  { id: 'parrot', name: '鹦鹉', icon: '鹦', bonus: '钻石+1' },
-  { id: 'penguin', name: '小企鹅', icon: '企', bonus: '钻石+1' },
-  { id: 'rabbit', name: '兔子', icon: '兔', bonus: '钻石+1' },
-  { id: 'fox', name: '小狐狸', icon: '狐', bonus: '钻石+1' },
-  { id: 'dragon', name: '小龙', icon: '龙', bonus: '钻石+5' },
-  { id: 'unicorn', name: '独角兽', icon: '角', bonus: '钻石+5' },
+  { id: 'cat', name: '小猫咪', icon: '猫', bonus: '钓鱼金币+10', desc: '慵懒的小猫，喜欢看你钓鱼' },
+  { id: 'dog', name: '小狗狗', icon: '狗', bonus: '钓鱼金币+10', desc: '忠诚的伙伴，会帮你看鱼竿' },
+  { id: 'parrot', name: '鹦鹉', icon: '鹦', bonus: '钓鱼钻石+1', desc: '叽叽喳喳，停在你的肩上' },
+  { id: 'penguin', name: '小企鹅', icon: '企', bonus: '钓鱼钻石+1', desc: '从南极远道而来的钓友' },
+  { id: 'rabbit', name: '兔子', icon: '兔', bonus: '钓鱼钻石+1', desc: '可爱的月兔，带来好运' },
+  { id: 'fox', name: '小狐狸', icon: '狐', bonus: '钓鱼钻石+1', desc: '聪明的狐狸，帮你发现稀有鱼' },
+  { id: 'dragon', name: '小龙', icon: '龙', bonus: '钓鱼钻石+5', desc: '神秘的东方小龙' },
+  { id: 'unicorn', name: '独角兽', icon: '角', bonus: '钓鱼钻石+5', desc: '传说中的神兽，极其罕见' },
 ];
 const ACCESSORIES = [
-  { id: 'scale_charm', name: '鳞光坠', icon: '鳞', color: '#66e6ff', desc: '提高稀有概率' },
-  { id: 'tide_bracelet', name: '潮汐环', icon: '潮', color: '#4ec9b0', desc: '减慢命中条' },
-  { id: 'star_brooch', name: '星砂针', icon: '星', color: '#ffd700', desc: '综合加成' },
+  { id: 'scale_charm', name: '鳞光坠', icon: '鳞', color: '#66e6ff', desc: '提高稀有概率', effect: 'rarity' },
+  { id: 'tide_bracelet', name: '潮汐环', icon: '潮', color: '#4ec9b0', desc: '减慢命中条', effect: 'slow' },
+  { id: 'star_brooch', name: '星砂针', icon: '星', color: '#ffd700', desc: '综合加成', effect: 'both' },
 ];
 const TOP_BUTTONS = [
   ['shop', '商店'], ['dex', '图鉴'], ['rod', '鱼竿'], ['character', '角色'], ['accessory', '首饰'],
   ['pet', '宠物'], ['rank', '排行'], ['gacha', '抽奖'], ['vip', 'VIP自动'], ['redeem', '兑换'],
-  ['share', '分享'], ['logout', '退出'],
+  ['share', '分享'], ...(DEBUG_LOG_ENABLED ? [['logs', '日志']] : []), ['logout', '退出'],
 ];
 const TOP_EMOJI = {
   shop: '🎁',
@@ -199,6 +345,7 @@ const TOP_EMOJI = {
   vip: '',
   redeem: '🎫',
   share: '📤',
+  logs: '🧾',
   logout: '',
 };
 const BAIT_IDS = Object.keys(BAITS);
@@ -218,18 +365,43 @@ const TOP_ASSETS = {
 const ASSET_PATHS = {};
 const IMAGES = {};
 
+installDebugLogCapture();
 registerAssets();
 preloadAssets();
 
+function sanitizeUsername(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9_\-]/g, '').slice(0, 24);
+}
+function stableServerUsername() {
+  let id = '';
+  try {
+    id = wx.getStorageSync(PLAYER_ID_KEY) || '';
+  } catch (_) {}
+  if (!sanitizeUsername(id)) {
+    id = 'player_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try { wx.setStorageSync(PLAYER_ID_KEY, id); } catch (_) {}
+  }
+  return sanitizeUsername(id);
+}
+function ensureServerUsername() {
+  const clean = sanitizeUsername(user && user.username);
+  if (clean) {
+    if (clean !== user.username) user.username = clean;
+    return clean;
+  }
+  const id = stableServerUsername();
+  if (user) user.username = id;
+  return id;
+}
 function freshUser() {
   return {
-    username: '微信玩家',
+    username: stableServerUsername(),
     money: 100,
     diamonds: 0,
-    baits: { worm: 5, shrimp: 0, lure: 0, magic: 0, divine: 0 },
+    baits: { ...Object.fromEntries(BAIT_IDS.map((id) => [id, 0])), worm: 5 },
     currentBait: 'worm',
     dex: {},
-    stats: { totalCatches: 0, totalEarned: 0, totalDiamonds: 0 },
+    stats: { totalCatches: 0, totalEarned: 0, totalDiamonds: 0, totalWeight: 0 },
     history: [],
     ownedRods: [],
     rodSkin: '',
@@ -255,6 +427,19 @@ let gachaTab = 'coins';
 let gachaSeason = 1;
 let vipTimer = 0;
 let activeDexBait = BAIT_IDS.includes('worm') ? 'worm' : BAIT_IDS[0];
+let rankTab = 'total-catches';
+let redeemInput = '';
+let redeemStatus = '';
+let redeemStatusKind = '';
+let baitDropdownOpen = false;
+let accessoryScroll = 0;
+let accessoryStatus = '';
+let accessoryDrag = null;
+let serverOnline = false;
+let serverBusy = false;
+let syncTimer = null;
+let remoteRankRows = null;
+let rankStatus = '排行榜连接中...';
 
 function loadUser() {
   try {
@@ -266,6 +451,7 @@ function loadUser() {
 }
 function normalize(u) {
   const f = freshUser();
+  u.username = sanitizeUsername(u.username) || stableServerUsername();
   u.baits = { ...f.baits, ...(u.baits || {}) };
   u.dex = u.dex || {};
   u.stats = { ...f.stats, ...(u.stats || {}) };
@@ -276,11 +462,116 @@ function normalize(u) {
   u.characterFragments = u.characterFragments || {};
   u.ownedPets = Array.isArray(u.ownedPets) ? u.ownedPets : [];
   u.accessories = Array.isArray(u.accessories) ? u.accessories : [];
+  u.accessories.forEach((acc) => { acc.star = clampAccessoryStar(acc.star); });
   return u;
 }
-function saveUser() {
+function wxRequest(options) {
+  return new Promise((resolve, reject) => {
+    if (!wx.request) {
+      reject(new Error('当前环境不支持网络请求'));
+      return;
+    }
+    const started = Date.now();
+    addDebugLog('request', [options.method || 'GET', options.url]);
+    wx.request({
+      ...options,
+      success(res) {
+        const code = res.statusCode || 0;
+        addDebugLog(code >= 200 && code < 300 ? 'response' : 'error', [
+          `${options.method || 'GET'} ${options.url}`,
+          code,
+          `${Date.now() - started}ms`,
+          res.data,
+        ]);
+        if (code >= 200 && code < 300) resolve(res.data);
+        else reject(new Error((res.data && res.data.error) || `HTTP ${code}`));
+      },
+      fail(err) {
+        addDebugLog('error', [`${options.method || 'GET'} ${options.url}`, err]);
+        reject(new Error((err && (err.errMsg || err.message)) || '网络请求失败'));
+      },
+    });
+  });
+}
+function apiPost(path, data) {
+  return wxRequest({
+    url: API_BASE + path,
+    method: 'POST',
+    data,
+    header: { 'content-type': 'application/json' },
+  });
+}
+function apiGet(path) {
+  return wxRequest({ url: API_BASE + path, method: 'GET' });
+}
+function hasLocalProgress(local) {
+  return !!(local && (
+    (local.stats && local.stats.totalCatches > 0) ||
+    Object.keys(local.dex || {}).length > 0 ||
+    (local.money || 0) > 100 ||
+    (local.diamonds || 0) > 0 ||
+    (local.ownedRods || []).length ||
+    (local.ownedPets || []).length ||
+    (local.accessories || []).length
+  ));
+}
+function looksLikeNewServerUser(remote) {
+  return !!(remote &&
+    (remote.money || 0) === 100 &&
+    (remote.diamonds || 0) === 0 &&
+    Object.keys(remote.dex || {}).length === 0 &&
+    (!remote.stats || (remote.stats.totalCatches || 0) === 0) &&
+    !(remote.ownedRods || []).length &&
+    !(remote.ownedPets || []).length &&
+    !(remote.accessories || []).length);
+}
+function applyRemoteUser(remote) {
+  if (!remote) return;
+  user = normalize({ ...freshUser(), ...remote });
+  wx.setStorageSync(SAVE_KEY, user);
+}
+async function loginServer() {
+  const local = normalize(user);
+  const username = ensureServerUsername();
+  serverBusy = true;
+  try {
+    const remote = await apiPost('/api/login', { username });
+    serverOnline = true;
+    if (looksLikeNewServerUser(remote) && hasLocalProgress(local)) {
+      user = normalize({ ...remote, ...local, username, vip: remote.vip === true });
+      await syncUserNow();
+      status = '本地存档已迁移到服务器';
+    } else {
+      applyRemoteUser(remote);
+      const pending = remote.pendingRankRewards || [];
+      status = pending.length ? `已领取排行奖励 +${pending.reduce((s, r) => s + (r.diamonds || 0), 0)} 钻石` : '服务器存档已同步';
+    }
+  } catch (err) {
+    serverOnline = false;
+    status = `服务器连接失败，使用本地存档`;
+  } finally {
+    serverBusy = false;
+  }
+}
+async function syncUserNow() {
+  const username = ensureServerUsername();
+  const remote = await apiPost('/api/save', { username, state: user });
+  serverOnline = true;
+  applyRemoteUser(remote);
+  return remote;
+}
+function scheduleServerSync() {
+  if (serverBusy) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    syncUserNow().catch(() => { serverOnline = false; });
+  }, 450);
+}
+function saveUser(options = {}) {
   normalize(user);
   wx.setStorageSync(SAVE_KEY, user);
+  if (options.remote !== false) scheduleServerSync();
 }
 function addTarget(id, x, y, w, h, data) {
   targets.push({ id, x, y, w, h, data });
@@ -310,6 +601,60 @@ function accessoryEffects() {
   if (acc.type === 'tide_bracelet') return { rarityBoost: 0, slow: Math.min(0.35, 0.012 * acc.star) };
   return { rarityBoost: Math.min(0.10, 0.003 * acc.star), slow: Math.min(0.24, 0.006 * acc.star) };
 }
+function clampAccessoryStar(star) {
+  return Math.max(1, Math.min(20, Math.floor(star || 1)));
+}
+function accessoryDef(type) {
+  return ACCESSORIES.find((a) => a.id === type) || null;
+}
+function accessoryEffectText(acc) {
+  const def = accessoryDef(acc.type);
+  if (!def) return '无加成';
+  const star = clampAccessoryStar(acc.star);
+  const parts = [];
+  if (def.effect === 'rarity' || def.effect === 'both') parts.push(`稀有概率 +${Math.round((def.effect === 'both' ? 0.003 : 0.006) * star * 1000) / 10}%`);
+  if (def.effect === 'slow' || def.effect === 'both') parts.push(`钓鱼条速度 -${Math.round((def.effect === 'both' ? 0.006 : 0.012) * star * 1000) / 10}%`);
+  return parts.join(' / ') || '无加成';
+}
+function accessoryUpgradeChance(star) {
+  star = clampAccessoryStar(star);
+  if (star >= 20) return 0;
+  return Math.max(0.25, 0.95 - (star - 1) * 0.035);
+}
+function accessoryUpgradeCost(star) {
+  star = clampAccessoryStar(star);
+  return star >= 20 ? 0 : star * 100;
+}
+function findAccessoryUpgradeMaterial(target) {
+  return user.accessories.find((item) => item.uid !== target.uid && item.type === target.type && clampAccessoryStar(item.star) === clampAccessoryStar(target.star));
+}
+function upgradeAccessory(uid) {
+  const target = user.accessories.find((item) => item.uid === uid);
+  if (!target) return;
+  target.star = clampAccessoryStar(target.star);
+  if (target.star >= 20) {
+    accessoryStatus = '已达到最高星级';
+    return;
+  }
+  const material = findAccessoryUpgradeMaterial(target);
+  if (!material) {
+    accessoryStatus = '缺少同款同星首饰';
+    return;
+  }
+  const cost = accessoryUpgradeCost(target.star);
+  if (user.money < cost) {
+    accessoryStatus = `金币不足，需要 ${cost} 金币`;
+    return;
+  }
+  const def = accessoryDef(target.type);
+  const success = Math.random() < accessoryUpgradeChance(target.star);
+  user.money -= cost;
+  if (success) target.star = clampAccessoryStar(target.star + 1);
+  user.accessories = user.accessories.filter((item) => item.uid !== material.uid);
+  if (user.equippedAccessory === material.uid) user.equippedAccessory = null;
+  accessoryStatus = success ? `${def ? def.name : '首饰'} 强化成功，升至 ${target.star} 星` : `${def ? def.name : '首饰'} 强化失败`;
+  saveUser();
+}
 function weightedRarity() {
   const boost = accessoryEffects().rarityBoost;
   const table = [['common', .70 - boost], ['rare', .255 + boost * .70], ['legendary', .04 + boost * .23], ['hidden', .005 + boost * .07]];
@@ -320,9 +665,41 @@ function weightedRarity() {
   }
   return 'common';
 }
+function currentTimeSlot() {
+  const hour = new Date(Date.now() + 8 * 3600000).getUTCHours();
+  if (hour >= 7 && hour < 14) return 'morning';
+  if (hour >= 14 && hour < 21) return 'afternoon';
+  return 'night';
+}
+function availableCharacterShardTargets() {
+  return CHARACTERS
+    .filter((ch) => ch.id !== 'fishing_master' && !user.ownedCharacters.includes(ch.id))
+    .map((ch) => ({ id: `${ch.id}_shard`, name: `${ch.name}碎片`, icon: ch.icon, characterId: ch.id }));
+}
+function rollDiamondReward() {
+  if (Math.random() < DIAMOND_JACKPOT_CHANCE) return 100;
+  return 1 + Math.floor(Math.random() * 3);
+}
+function rollBonusBaitDrops() {
+  const drops = [];
+  if (BAITS.divine && Math.random() < DIVINE_BAIT_DROP_CHANCE) drops.push({ id: 'divine', count: 1 });
+  if (BAITS.jb && Math.random() < JB_BAIT_DROP_CHANCE) drops.push({ id: 'jb', count: 1 });
+  return drops;
+}
 function rollCatch() {
   const bait = BAITS[user.currentBait] || BAITS.worm;
-  if (user.currentBait !== 'divine') {
+  if (bait.characterShardOnly) {
+    const targets = availableCharacterShardTargets();
+    const shard = pick(targets.length ? targets : CHARACTERS.filter((ch) => ch.id !== 'fishing_master').map((ch) => ({ id: `${ch.id}_shard`, name: `${ch.name}碎片`, icon: ch.icon, characterId: ch.id })));
+    return { kind: 'character_shard', item: { ...shard, rarity: 'legendary' }, characterId: shard.characterId, shardCount: 1, rarity: 'character_shard', weight: 0, value: 0, diamondValue: 0 };
+  }
+  const rod = activeRod();
+  if (rod && ROD_FISH[rod.id] && Math.random() < 0.05) {
+    const item = pick(ROD_FISH[rod.id]);
+    const weight = +(item.minW + Math.random() * (item.maxW - item.minW)).toFixed(2);
+    return { kind: 'fish', item, rarity: 'rod_exclusive', weight, value: 0, diamondValue: Math.round(weight) };
+  }
+  if (!bait.specialOnly && user.currentBait !== 'divine') {
     const r = Math.random();
     if (r < 0.20) return { kind: 'trash', item: pick(TRASH), rarity: 'trash', weight: 0, value: 0, diamondValue: 0 };
     if (r < 0.22) {
@@ -330,14 +707,26 @@ function rollCatch() {
       return { kind: 'treasure', item, rarity: 'treasure', weight: 0, value: item.value, diamondValue: item.id === 'gem' ? 5 : 0 };
     }
   }
-  const rarity = user.currentBait === 'divine' ? (Math.random() < .22 ? 'hidden' : 'legendary') : weightedRarity();
-  const pool = bait.fishes.filter((f) => f.rarity === rarity);
+  if (bait.specialOnly) {
+    const item = pick(bait.fishes);
+    const weight = +(item.minW + Math.random() * (item.maxW - item.minW)).toFixed(2);
+    const value = item.diamondValue ? 0 : Math.max(1, Math.round(weight * item.price));
+    return { kind: 'fish', item, rarity: item.rarity, weight, value, diamondValue: item.diamondValue || 0 };
+  }
+  let rarity = weightedRarity();
+  const slot = currentTimeSlot();
+  let pool = bait.fishes.filter((f) => f.rarity === rarity && (!f.timeSlot || f.timeSlot === slot));
+  if (!pool.length) {
+    rarity = 'common';
+    pool = bait.fishes.filter((f) => f.rarity === 'common');
+  }
   const item = pick(pool.length ? pool : bait.fishes);
   const weight = +(item.minW + Math.random() * (item.maxW - item.minW)).toFixed(2);
   return { kind: 'fish', item, rarity: item.rarity, weight, value: Math.max(1, Math.round(weight * item.price)), diamondValue: 0 };
 }
 function cast() {
   if (state.phase !== 'idle') return;
+  baitDropdownOpen = false;
   const count = user.baits[user.currentBait] || 0;
   if (count <= 0) {
     status = '没有鱼饵了，去商店买点吧';
@@ -393,16 +782,47 @@ function petBonus() {
   return { coins: 0, diamonds: 1 };
 }
 function applyCatch(c) {
+  const isShard = c.kind === 'character_shard';
   const bonus = petBonus();
-  user.money += c.value + bonus.coins;
-  user.diamonds += c.diamondValue + bonus.diamonds;
-  user.dex[c.item.id] = user.dex[c.item.id] || { count: 0, maxWeight: 0 };
-  user.dex[c.item.id].count += 1;
-  user.dex[c.item.id].maxWeight = Math.max(user.dex[c.item.id].maxWeight || 0, c.weight);
+  const bonusDiamonds = isShard ? 0 : rollDiamondReward();
+  const baitDrops = isShard ? [] : rollBonusBaitDrops();
+  baitDrops.forEach((drop) => {
+    user.baits[drop.id] = (user.baits[drop.id] || 0) + drop.count;
+  });
+  c.petBonusCoins = isShard ? 0 : bonus.coins;
+  c.petBonusDiamonds = isShard ? 0 : bonus.diamonds;
+  c.totalCoins = c.value + c.petBonusCoins;
+  c.diamonds = bonusDiamonds;
+  c.baitDrops = baitDrops;
+  c.baitDrop = baitDrops[0] || null;
+  c.totalDiamonds = c.diamondValue + bonusDiamonds + c.petBonusDiamonds;
+  user.money += c.value + c.petBonusCoins;
+  user.diamonds += c.diamondValue + bonusDiamonds + c.petBonusDiamonds;
+  if (isShard && c.characterId) {
+    user.characterFragments[c.characterId] = (user.characterFragments[c.characterId] || 0) + (c.shardCount || 1);
+    c.shardProgress = user.characterFragments[c.characterId];
+    c.shardsRequired = 10;
+    if (!user.ownedCharacters.includes(c.characterId) && c.shardProgress >= c.shardsRequired) {
+      user.characterFragments[c.characterId] -= c.shardsRequired;
+      user.ownedCharacters.push(c.characterId);
+      user.activeCharacter = c.characterId;
+      c.unlockedCharacter = c.characterId;
+      c.shardProgress = user.characterFragments[c.characterId] || 0;
+    }
+  } else {
+    user.dex[c.item.id] = user.dex[c.item.id] || { count: 0, maxWeight: 0 };
+    user.dex[c.item.id].count += 1;
+    user.dex[c.item.id].maxWeight = Math.max(user.dex[c.item.id].maxWeight || 0, c.weight);
+  }
   user.stats.totalCatches += 1;
-  user.stats.totalEarned += c.value;
-  user.stats.totalDiamonds += c.diamondValue + bonus.diamonds;
-  user.history.unshift({ name: c.item.name, rarity: c.rarity, weight: c.weight, value: c.value, at: Date.now() });
+  user.stats.totalEarned += c.value + c.petBonusCoins;
+  user.stats.totalDiamonds += c.diamondValue + bonusDiamonds + c.petBonusDiamonds;
+  user.stats.totalWeight = +(((user.stats.totalWeight || 0) + (c.weight || 0)).toFixed(2));
+  const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  if (!user.dailyStats || user.dailyStats.date !== today) user.dailyStats = { date: today, catches: 0, weight: 0 };
+  user.dailyStats.catches += 1;
+  user.dailyStats.weight = +((user.dailyStats.weight + (c.weight || 0)).toFixed(2));
+  user.history.unshift({ name: c.item.name, rarity: c.rarity, weight: c.weight, value: c.value + bonus.coins, diamondValue: c.diamondValue, diamonds: bonusDiamonds, baitDrops, at: Date.now() });
   if (user.history.length > 30) user.history.length = 30;
   status = `钓到 ${c.item.name}`;
 }
@@ -442,6 +862,7 @@ function askBuyBaitCount(id) {
 function changeBait(delta) {
   if (state.phase !== 'idle') {
     status = '钓鱼中不能切换鱼饵';
+    baitDropdownOpen = false;
     return;
   }
   const current = Math.max(0, BAIT_IDS.indexOf(user.currentBait));
@@ -449,7 +870,37 @@ function changeBait(delta) {
   status = `当前鱼饵：${BAITS[user.currentBait].name}`;
   saveUser();
 }
-function doGacha(count) {
+function selectBait(id) {
+  if (state.phase !== 'idle') {
+    status = '钓鱼中不能切换鱼饵';
+    baitDropdownOpen = false;
+    return;
+  }
+  if (!BAITS[id]) return;
+  user.currentBait = id;
+  baitDropdownOpen = false;
+  status = `当前鱼饵：${BAITS[id].name}`;
+  saveUser();
+}
+function gachaServerResult(result) {
+  if (!result) return { icon: '奖', text: '奖励', asset: 'ui_gacha' };
+  if (result.type === 'rod') {
+    const rod = RODS.concat(GACHA_RODS).find((r) => r.id === result.id);
+    return { icon: (rod && rod.icon) || '竿', text: (rod && rod.name) || result.id, asset: 'rod_' + result.id };
+  }
+  if (result.type === 'pet') {
+    const pet = PETS.find((p) => p.id === result.id);
+    return { icon: '宠', text: (pet && pet.name) || result.id, asset: 'pet_' + result.id };
+  }
+  if (result.type === 'accessory') {
+    const def = accessoryDef(result.id);
+    return { icon: (def && def.icon) || '饰', text: `${(def && def.name) || result.id}${result.star ? ` ${result.star}★` : ''}`, asset: 'accessory_' + result.id };
+  }
+  if (result.type === 'diamonds') return { icon: '钻', text: `${result.diamonds || 0} 钻石`, asset: 'ui_redeem' };
+  if (result.type === 'coins') return { icon: '币', text: `${result.coins || 0} 金币`, asset: 'ui_gacha' };
+  return { icon: '奖', text: result.type || '奖励', asset: 'ui_gacha' };
+}
+function doLocalGacha(count) {
   const isDiamond = gachaTab === 'diamonds';
   const cost = isDiamond ? (count === 10 ? 90 : 10) : (count === 10 ? (gachaSeason === 2 ? 100000 : 9000) : (gachaSeason === 2 ? 10000 : 1000));
   const cur = isDiamond ? 'diamonds' : 'money';
@@ -462,6 +913,31 @@ function doGacha(count) {
   for (let i = 0; i < count; i++) results.push(applyGachaRoll());
   modal.result = results;
   saveUser();
+}
+async function doGacha(count) {
+  const isDiamond = gachaTab === 'diamonds';
+  const cost = isDiamond ? (count === 10 ? 90 : 10) : (count === 10 ? (gachaSeason === 2 ? 100000 : 9000) : (gachaSeason === 2 ? 10000 : 1000));
+  const cur = isDiamond ? 'diamonds' : 'money';
+  if (user[cur] < cost) {
+    status = isDiamond ? '钻石不足' : '金币不足';
+    return;
+  }
+  status = '正在请求服务器抽奖...';
+  try {
+    const data = await apiPost('/api/gacha', {
+      username: ensureServerUsername(),
+      currency: isDiamond ? 'diamonds' : 'coins',
+      count,
+      season: gachaSeason,
+    });
+    serverOnline = true;
+    applyRemoteUser(data.user);
+    modal.result = (data.results || []).map(gachaServerResult);
+    status = '抽奖完成';
+  } catch (err) {
+    serverOnline = false;
+    status = `服务器抽奖失败：${err.message}`;
+  }
 }
 function addUnique(list, id) {
   if (!list.includes(id)) list.push(id);
@@ -577,7 +1053,7 @@ function registerAsset(key, path) {
   ASSET_PATHS[key] = path;
 }
 function registerAssets() {
-  Object.values(BAITS).flatMap((b) => b.fishes).concat(TRASH, TREASURE).forEach((item) => {
+  Object.values(BAITS).flatMap((b) => b.fishes).concat(TRASH, TREASURE, ALL_ROD_FISH).forEach((item) => {
     registerAsset('fish_' + item.id, `assets/icons/fish_${item.id}.png`);
   });
   BAIT_IDS.forEach((id) => registerAsset('bait_' + id, `assets/icons/bait_${id}.png`));
@@ -657,7 +1133,8 @@ function drawTopbar() {
   drawText(user.username, CONTENT_X + TOPBAR_PAD_X, userY, 14, '#4ec9b0');
   drawText(`💰 ${user.money}`, CONTENT_X + Math.min(112, CONTENT_W * .28), userY, 14, '#ffd700');
   drawText(`💎 ${user.diamonds}`, CONTENT_X + Math.min(205, CONTENT_W * .52), userY, 14, '#66e6ff');
-  drawText('v1.0.23', CONTENT_X + CONTENT_W - TOPBAR_PAD_X, userY, 9, '#666666', 'right');
+  drawText(serverOnline ? '云同步' : '本地', CONTENT_X + CONTENT_W - 66, userY, 9, serverOnline ? '#4ec9b0' : '#ffae42', 'right');
+  drawText('v1.0.24', CONTENT_X + CONTENT_W - TOPBAR_PAD_X, userY, 9, '#666666', 'right');
   const actionY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H + 6;
   const bw = Math.floor((CONTENT_W - TOPBAR_PAD_X * 2 - ACTION_GAP * (ACTION_COLS - 1)) / ACTION_COLS);
   TOP_BUTTONS.forEach((btn, i) => {
@@ -743,14 +1220,33 @@ function drawGamebar() {
   drawFittedText(`${bait.name} (×${user.baits[user.currentBait] || 0})`, selectX + 46, rowY, 13, '#ffd700', 'left', selectW - 64);
   drawText('⌄', selectX + selectW - 14, rowY, 13, '#e8e8e8', 'center');
   drawText(`剩余 ${user.baits[user.currentBait] || 0} 个`, selectX + selectW + 28, rowY, 14, '#e8e8e8', 'left');
-  addTarget('baitprev', selectX, rowY - 20, selectW / 2, 40);
-  addTarget('baitnext', selectX + selectW / 2, rowY - 20, selectW / 2, 40);
+  addTarget('baittoggle', selectX, rowY - 20, selectW, 40);
   const rod = activeRod();
   const upcoming = nextRod();
   const dexCount = Object.keys(user.dex).length;
   const rodLine = upcoming ? `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}  下一把: ${upcoming.name} (${dexCount}/${upcoming.threshold})` : `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}`;
   drawFittedText(rodLine, W / 2, y + 67, 12, '#d8c98a', 'center', CONTENT_W - 42);
   drawFittedText(status, W / 2, y + 91, 13, '#4ec9b0', 'center', CONTENT_W - 36);
+  if (baitDropdownOpen) {
+    const availableBaits = BAIT_IDS.filter((id) => (user.baits[id] || 0) > 0);
+    const itemH = 34;
+    const dropY = rowY + 24;
+    const dropW = Math.max(selectW, 176);
+    const dropX = Math.max(CONTENT_X + 14, Math.min(selectX, CONTENT_X + CONTENT_W - dropW - 14));
+    const listH = Math.max(1, availableBaits.length) * itemH + 8;
+    drawRect(dropX, dropY, dropW, listH, '#0d1421', '#ffd700');
+    if (!availableBaits.length) {
+      drawFittedText('暂无可用鱼饵', dropX + dropW / 2, dropY + 22, 12, '#777777', 'center', dropW - 16);
+    }
+    availableBaits.forEach((id, i) => {
+      const iy = dropY + 4 + i * itemH;
+      const active = id === user.currentBait;
+      drawRect(dropX + 4, iy, dropW - 8, itemH - 4, active ? '#ffd700' : '#101827', active ? '#ffd700' : '#33344f');
+      drawAsset('bait_' + id, dropX + 12, iy + 4, 22, 22);
+      drawFittedText(`${BAITS[id].name} ×${user.baits[id] || 0}`, dropX + 42, iy + 15, 12, active ? '#1a1a2e' : '#ffd700', 'left', dropW - 54);
+      addTarget('baitselect', dropX + 4, iy, dropW - 8, itemH - 4, { id });
+    });
+  }
 }
 function drawHitbar() {
   if (!hb.active) return;
@@ -825,6 +1321,7 @@ function drawModal() {
     gacha: '幸运抽奖',
     redeem: '兑换码',
     share: '分享',
+    logs: '小程序日志',
     result: '钓获结果',
   };
   drawText(titleMap[modal.type] || '', W / 2, modalTop + 29, 20, '#ffd700', 'center');
@@ -838,6 +1335,7 @@ function drawModal() {
   else if (modal.type === 'gacha') drawGachaModal();
   else if (modal.type === 'redeem') drawRedeemModal();
   else if (modal.type === 'share') drawShareModal();
+  else if (modal.type === 'logs') drawLogsModal();
   else if (modal.type === 'result') drawResultModal();
 }
 function drawListItem(x, y, w, h, icon, name, desc, color, asset, reserveRight = 0) {
@@ -886,9 +1384,154 @@ function drawFishPixelIcon(x, y, item, unlocked) {
   drawRect(x - 8, y - 20, 14, 7, dark);
   drawRect(x - 8, y + 13, 14, 7, dark);
 }
+function drawMiniBadge(text, x, y, color, textColor = '#0d1421') {
+  const w = Math.max(34, Math.min(68, String(text).length * 11 + 12));
+  drawRect(x - w, y, w, 18, color);
+  drawFittedText(text, x - w / 2, y + 9, 10, textColor, 'center', w - 6);
+}
+function drawSegmentTabs(id, items, active, x, y, w, h, gap = 4) {
+  const tabW = Math.floor((w - gap * (items.length - 1)) / items.length);
+  items.forEach((item, i) => {
+    const tx = x + i * (tabW + gap);
+    drawButton(id, item.label, tx, y, tabW, h, active === item.value, item.data || { value: item.value }, item.asset);
+  });
+}
+function drawRodPreview(rod, x, y, w, h, locked) {
+  ctx.save();
+  if (locked) ctx.globalAlpha = .45;
+  const pad = 14;
+  const baseX = x + w - pad;
+  const baseY = y + h - 10;
+  const tipX = x + pad;
+  const tipY = y + 12;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = rod.color;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  ctx.strokeStyle = rod.hi;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  ctx.strokeStyle = locked ? '#607080' : 'rgba(255,255,255,.75)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.quadraticCurveTo(tipX + w * .16, y + h * .72, tipX + w * .24, y + h - 4);
+  ctx.stroke();
+  drawRect(tipX + w * .22, y + h - 7, 5, 5, locked ? '#607080' : '#ffd700');
+  ctx.restore();
+}
+function drawPrizeCard(prize, x, y, w, h) {
+  const palette = {
+    ultimate: '#ff6b00',
+    legendary: '#8b5cf6',
+    rare: '#4ec9b0',
+    coin: '#ffd700',
+    diamond: '#66e6ff',
+    common: '#888888',
+    accessory: '#e8d28a',
+  };
+  const color = palette[prize.rarity] || '#555555';
+  drawRect(x, y, w, h, '#0d1421', color);
+  const iconSize = 30;
+  const ix = x + 10;
+  const iy = y + (h - iconSize) / 2;
+  if (!drawAsset(prize.asset, ix, iy, iconSize, iconSize)) drawText(prize.icon || '奖', ix + iconSize / 2, iy + iconSize / 2, 18, color, 'center');
+  drawFittedText(prize.name, x + 48, y + h / 2 - 8, 12, color, 'left', w - 58);
+  drawFittedText(prize.rate, x + 48, y + h / 2 + 10, 10, '#9aa6b2', 'left', w - 58);
+}
+function getGachaPrizes() {
+  if (gachaTab === 'coins' && gachaSeason === 1) return [
+    { name: '神秘暗夜竿', rate: '0.1%', rarity: 'legendary', asset: 'rod_nightmyst', icon: '月' },
+    { name: '熊猫竿', rate: '1%', rarity: 'rare', asset: 'rod_panda', icon: '熊' },
+    { name: '1000金币', rate: '8.9%', rarity: 'coin', asset: 'ui_gacha', icon: '币' },
+    { name: '1金币', rate: '90%', rarity: 'common', asset: 'ui_gacha', icon: '币' },
+  ];
+  if (gachaTab === 'coins') return [
+    { name: '小猫咪 / 小狗狗', rate: '各0.1%', rarity: 'ultimate', asset: 'pet_cat', icon: '宠' },
+    { name: '鹦鹉 / 企鹅 / 兔子 / 狐狸', rate: '各0.05%', rarity: 'legendary', asset: 'pet_parrot', icon: '宠' },
+    { name: '小龙 / 独角兽', rate: '各0.01%', rarity: 'legendary', asset: 'pet_dragon', icon: '宠' },
+    { name: '10钻石', rate: '10%', rarity: 'diamond', asset: 'ui_redeem', icon: '钻' },
+    { name: '1金币', rate: '89.58%', rarity: 'common', asset: 'ui_gacha', icon: '币' },
+  ];
+  if (gachaSeason === 1) return [
+    { name: '极品火麒麟鱼竿', rate: '1%', rarity: 'ultimate', asset: 'rod_firekirin', icon: '火' },
+    { name: '极品绿玄武鱼竿', rate: '1%', rarity: 'ultimate', asset: 'rod_greenxuanwu', icon: '龟' },
+    { name: '10钻石', rate: '8%', rarity: 'diamond', asset: 'ui_redeem', icon: '钻' },
+    { name: '1000金币', rate: '90%', rarity: 'coin', asset: 'ui_gacha', icon: '币' },
+  ];
+  if (gachaSeason === 2) return [
+    { name: '耳机竿', rate: '0.01%', rarity: 'ultimate', asset: 'rod_headphone', icon: '耳' },
+    { name: 'Candy竿', rate: '0.99%', rarity: 'legendary', asset: 'rod_candy', icon: '糖' },
+    { name: '10钻石', rate: '10%', rarity: 'diamond', asset: 'ui_redeem', icon: '钻' },
+    { name: '1000金币', rate: '90%', rarity: 'coin', asset: 'ui_gacha', icon: '币' },
+  ];
+  return [
+    { name: '鳞光坠', rate: '10%', rarity: 'accessory', asset: 'accessory_scale_charm', icon: '鳞' },
+    { name: '潮汐环', rate: '10%', rarity: 'accessory', asset: 'accessory_tide_bracelet', icon: '潮' },
+    { name: '星砂针', rate: '10%', rarity: 'legendary', asset: 'accessory_star_brooch', icon: '星' },
+    { name: '100金币', rate: '70%', rarity: 'coin', asset: 'ui_gacha', icon: '币' },
+  ];
+}
+function gachaResultRarity(result) {
+  if (!result) return 'common';
+  if (String(result.text).includes('极品') || result.text === '耳机竿' || result.text === '小龙' || result.text === '独角兽') return 'ultimate';
+  if (result.asset && result.asset.startsWith('rod_')) return 'legendary';
+  if (result.asset && result.asset.startsWith('pet_')) return 'rare';
+  if (result.asset && result.asset.startsWith('accessory_')) return 'accessory';
+  if (String(result.text).includes('钻石')) return 'diamond';
+  if (String(result.text).includes('1000') || String(result.text).includes('100')) return 'coin';
+  return 'common';
+}
+async function redeemCode(code) {
+  code = String(code || '').trim().toUpperCase();
+  redeemInput = code;
+  if (!code) {
+    redeemStatus = '请输入兑换码';
+    redeemStatusKind = 'error';
+    return;
+  }
+  redeemStatus = '正在请求服务器兑换...';
+  redeemStatusKind = 'info';
+  try {
+    const data = await apiPost('/api/redeem', { username: ensureServerUsername(), code });
+    serverOnline = true;
+    applyRemoteUser(data.user);
+    const parts = [];
+    if (data.coins) parts.push(`+${data.coins} 金币`);
+    if (data.diamonds) parts.push(`+${data.diamonds} 钻石`);
+    redeemStatus = `兑换成功！${parts.join(' / ') || data.desc || '奖励已到账'}`;
+    redeemInput = '';
+    redeemStatusKind = 'success';
+  } catch (err) {
+    serverOnline = false;
+    redeemStatus = err.message || '兑换失败';
+    redeemStatusKind = 'error';
+  }
+}
+function askRedeemCode() {
+  wx.showModal({
+    title: '兑换码',
+    content: '输入兑换码获取奖励',
+    editable: true,
+    placeholderText: redeemInput || '输入兑换码',
+    success(res) {
+      if (!res.confirm) return;
+      redeemInput = String(res.content || '').trim().toUpperCase();
+      redeemStatus = redeemInput ? '点击兑换领取奖励' : '';
+      redeemStatusKind = redeemInput ? 'info' : '';
+    },
+  });
+}
 function drawShopModal() {
   let y = 136;
   Object.entries(BAITS).forEach(([id, bait]) => {
+    if (bait.purchasable === false) return;
     drawListItem(34, y, W - 68, 58, '饵', `${bait.name} x${user.baits[id] || 0}`, `${bait.desc} · ${bait.currency === 'diamonds' ? '钻石' : '金币'} ${bait.price}`, bait.color, 'bait_' + id, 104);
     drawButton('buybait', '买1', W - 132, y + 13, 42, 32, false, { id, count: 1 });
     drawButton('buybaitn', '买N', W - 84, y + 13, 42, 32, false, { id });
@@ -896,48 +1539,69 @@ function drawShopModal() {
   });
 }
 function drawDexModal() {
-  if (!BAITS[activeDexBait]) activeDexBait = BAIT_IDS[0];
-  const tabCols = 3;
-  const tabGap = 6;
+  if (activeDexBait !== '_rod_exclusive' && (!BAITS[activeDexBait] || BAITS[activeDexBait].hideDex)) activeDexBait = BAIT_IDS.find((id) => !BAITS[id].hideDex) || BAIT_IDS[0];
+  const tabCols = W <= 360 ? 2 : 3;
+  const tabGap = 4;
   const tabX = 34;
   const tabY = 126;
   const tabW = Math.floor((W - 68 - tabGap * (tabCols - 1)) / tabCols);
-  const tabH = 30;
-  BAIT_IDS.forEach((id, i) => {
+  const tabH = 28;
+  const dexTabs = BAIT_IDS.filter((id) => !BAITS[id].hideDex).concat('_rod_exclusive');
+  dexTabs.forEach((id, i) => {
     const x = tabX + (i % tabCols) * (tabW + tabGap);
-    const y = tabY + Math.floor(i / tabCols) * (tabH + 6);
-    drawButton('dextab', BAITS[id].name, x, y, tabW, tabH, activeDexBait === id, { id }, 'bait_' + id);
+    const y = tabY + Math.floor(i / tabCols) * (tabH + 5);
+    drawButton('dextab', id === '_rod_exclusive' ? '鱼竿专属' : (BAITS[id].dexName || BAITS[id].name), x, y, tabW, tabH, activeDexBait === id, { id }, id === '_rod_exclusive' ? 'rod_candy' : 'bait_' + id);
   });
-  const bait = BAITS[activeDexBait];
-  const items = bait.fishes;
+  const isRodDex = activeDexBait === '_rod_exclusive';
+  const bait = isRodDex ? { name: '鱼竿专属', color: RARITY_COLOR.rod_exclusive } : BAITS[activeDexBait];
+  const items = isRodDex ? ALL_ROD_FISH : bait.fishes;
   const unlocked = items.filter((item) => user.dex[item.id]).length;
-  const gridTop = tabY + Math.ceil(BAIT_IDS.length / tabCols) * (tabH + 6) + 10;
-  const cols = 3;
-  const colW = (W - 84) / cols;
+  const gridTop = tabY + Math.ceil(dexTabs.length / tabCols) * (tabH + 5) + 10;
+  const cols = W <= 360 ? 3 : 4;
+  const gap = 8;
+  const colW = (W - 68 - gap * (cols - 1)) / cols;
+  const cardH = W <= 360 ? 80 : 86;
   items.forEach((item, i) => {
-    const x = 34 + (i % cols) * (colW + 8);
-    const y = gridTop + Math.floor(i / cols) * 76;
+    const x = 34 + (i % cols) * (colW + gap);
+    const y = gridTop + Math.floor(i / cols) * (cardH + 8);
     const found = user.dex[item.id];
     const border = found ? RARITY_COLOR[item.rarity] : '#555555';
-    drawRect(x, y, colW, 68, '#0d1421', border);
-    drawFishPixelIcon(x + colW / 2, y + 23, item, !!found);
-    drawFittedText(found ? item.name : '???', x + colW / 2, y + 49, 11, found ? '#e8e8e8' : '#777777', 'center', colW - 8);
-    drawFittedText(found ? `x${found.count} | 最大 ${found.maxWeight}kg` : RARITY_NAME[item.rarity], x + colW / 2, y + 61, 9, found ? RARITY_COLOR[item.rarity] : '#777777', 'center', colW - 8);
+    drawRect(x, y, colW, cardH, '#0d1421', border);
+    drawFishPixelIcon(x + colW / 2, y + 24, item, !!found);
+    drawFittedText(found ? item.name : '???', x + colW / 2, y + 53, 11, found ? RARITY_COLOR[item.rarity] : '#777777', 'center', colW - 8);
+    drawFittedText(found ? RARITY_NAME[item.rarity] : '未解锁', x + colW / 2, y + 66, 9, found ? '#d8d8d8' : '#777777', 'center', colW - 8);
+    drawFittedText(found ? `×${found.count} · ${found.maxWeight}kg` : RARITY_NAME[item.rarity], x + colW / 2, y + 78, 9, found ? '#9aa6b2' : '#777777', 'center', colW - 8);
   });
-  const statsY = Math.min(H - 86, gridTop + Math.ceil(items.length / cols) * 76 + 8);
-  drawRect(34, statsY, W - 68, 48, '#0d1421', '#555555');
-  drawText(`${bait.name}图鉴：${unlocked} / ${items.length}`, 46, statsY + 15, 13, bait.color || '#ffd700');
-  drawFittedText(`累计钓获 ${user.stats.totalCatches || 0} 次 · 收入 ${user.stats.totalEarned || 0} 金币 · 钻石 ${user.stats.totalDiamonds || 0}`, 46, statsY + 34, 11, '#9aa6b2', 'left', W - 92);
+  const statsY = Math.min(H - 94, gridTop + Math.ceil(items.length / cols) * (cardH + 8) + 8);
+  drawRect(34, statsY, W - 68, 58, '#0d1421', '#555555');
+  drawText(`${bait.dexName || bait.name}图鉴：${unlocked} / ${items.length}`, 46, statsY + 15, 13, bait.color || '#ffd700');
+  drawText(`累计钓获：${user.stats.totalCatches || 0} 次`, 46, statsY + 35, 11, '#9aa6b2');
+  drawFittedText(`累计收入：${user.stats.totalEarned || 0} 金币    累计钻石：${user.stats.totalDiamonds || 0}`, 46, statsY + 50, 11, '#9aa6b2', 'left', W - 92);
 }
 function drawRodModal() {
   const list = RODS.concat(GACHA_RODS);
   const dexCount = Object.keys(user.dex).length;
+  const x0 = 34;
+  const y0 = 132;
+  const gap = 10;
+  const cols = W <= 360 ? 1 : 2;
+  const cardW = Math.floor((W - 68 - gap * (cols - 1)) / cols);
+  const cardH = cols === 1 ? 80 : 94;
   list.forEach((rod, i) => {
-    const y = 136 + i * 50;
+    const x = x0 + (i % cols) * (cardW + gap);
+    const y = y0 + Math.floor(i / cols) * (cardH + 10);
     const gacha = GACHA_RODS.some((r) => r.id === rod.id);
     const unlocked = gacha ? user.ownedRods.includes(rod.id) : dexCount >= rod.threshold;
-    drawListItem(34, y, W - 68, 42, rod.icon || '竿', rod.name, unlocked ? (activeRod().id === rod.id ? '装备中' : '点击装备') : (gacha ? '抽奖限定' : `${dexCount}/${rod.threshold}`), rod.hi, 'rod_' + rod.id, unlocked && activeRod().id !== rod.id ? 62 : 0);
-    if (unlocked && activeRod().id !== rod.id) drawButton('equiprod', '装备', W - 92, y + 6, 48, 30, false, { id: rod.id });
+    const active = activeRod().id === rod.id;
+    drawRect(x, y, cardW, cardH, '#0d1421', active ? '#4ec9b0' : (unlocked ? '#ffd700' : '#555555'));
+    drawRodPreview(rod, x + 8, y + 8, cardW - 16, cols === 1 ? 30 : 38, !unlocked);
+    drawFittedText(rod.name, x + cardW / 2, y + (cols === 1 ? 48 : 56), 13, unlocked ? rod.hi : '#777777', 'center', cardW - 16);
+    drawFittedText(rod.desc, x + cardW / 2, y + (cols === 1 ? 63 : 72), 10, unlocked ? '#9aa6b2' : '#666666', 'center', cardW - 16);
+    const req = unlocked ? (active ? '装备中' : '点击装备') : (gacha ? '抽奖限定' : `收集 ${rod.threshold} 种鱼 (${dexCount}/${rod.threshold})`);
+    drawFittedText(req, x + cardW / 2, y + cardH - 10, 10, unlocked ? '#4ec9b0' : '#777777', 'center', cardW - 16);
+    if (active) drawMiniBadge('装备中', x + cardW - 6, y + 6, '#4ec9b0');
+    else if (gacha && !unlocked) drawMiniBadge('限定', x + cardW - 6, y + 6, '#c586c0', '#ffffff');
+    if (unlocked && !active) addTarget('equiprod', x, y, cardW, cardH, { id: rod.id });
   });
 }
 function drawCharacterModal() {
@@ -961,77 +1625,283 @@ function drawCharacterModal() {
   });
 }
 function drawPetModal() {
+  const cols = W <= 360 ? 1 : 2;
+  const gap = 10;
+  const x0 = 34;
+  const y0 = 132;
+  const cardW = Math.floor((W - 68 - gap * (cols - 1)) / cols);
+  const cardH = cols === 1 ? 76 : 92;
   PETS.forEach((pet, i) => {
-    const y = 136 + i * 46;
+    const x = x0 + (i % cols) * (cardW + gap);
+    const y = y0 + Math.floor(i / cols) * (cardH + 10);
     const owned = user.ownedPets.includes(pet.id);
-    drawListItem(34, y, W - 68, 38, pet.icon, pet.name, owned ? (user.activePet === pet.id ? `已装备 · ${pet.bonus}` : pet.bonus) : '抽奖获得', '#4ec9b0', 'pet_' + pet.id, owned ? 62 : 0);
-    if (owned) drawButton('equippet', user.activePet === pet.id ? '卸下' : '装备', W - 92, y + 4, 48, 30, false, { id: pet.id });
+    const active = user.activePet === pet.id;
+    drawRect(x, y, cardW, cardH, '#0d1421', active ? '#4ec9b0' : (owned ? '#ffd700' : '#555555'));
+    const iconSize = cols === 1 ? 42 : 38;
+    const iconX = cols === 1 ? x + 14 : x + cardW / 2 - iconSize / 2;
+    const iconY = cols === 1 ? y + 16 : y + 10;
+    const hasAsset = drawAsset('pet_' + pet.id, iconX, iconY, iconSize, iconSize);
+    if (!hasAsset) drawText(pet.icon, iconX + iconSize / 2, iconY + iconSize / 2, 22, owned ? '#4ec9b0' : '#777777', 'center');
+    if (cols === 1) {
+      drawFittedText(pet.name, x + 68, y + 22, 14, owned ? '#ffd700' : '#777777', 'left', cardW - 118);
+      drawFittedText(owned ? pet.bonus : '抽奖获得', x + 68, y + 45, 11, owned ? '#9aa6b2' : '#666666', 'left', cardW - 118);
+      if (owned) drawButton('equippet', active ? '卸下' : '装备', x + cardW - 58, y + 23, 48, 30, false, { id: pet.id });
+    } else {
+      drawFittedText(pet.name, x + cardW / 2, y + 57, 13, owned ? '#ffd700' : '#777777', 'center', cardW - 16);
+      drawFittedText(pet.desc, x + cardW / 2, y + 70, 9, owned ? '#9aa6b2' : '#666666', 'center', cardW - 16);
+      drawFittedText(owned ? pet.bonus : `抽奖获得 · ${pet.bonus}`, x + cardW / 2, y + 82, 9, owned ? '#ffd700' : '#777777', 'center', cardW - 16);
+      if (active) drawMiniBadge('装备中', x + cardW - 6, y + 6, '#4ec9b0');
+      if (owned) addTarget('equippet', x, y, cardW, cardH, { id: pet.id });
+    }
   });
 }
 function drawAccessoryModal() {
-  if (!user.accessories.length) drawText('暂无首饰，可在钻石抽奖第三期获得', W / 2, 155, 14, '#cccccc', 'center');
-  user.accessories.forEach((acc, i) => {
-    const def = ACCESSORIES.find((a) => a.id === acc.type);
-    const y = 136 + i * 54;
-    drawListItem(34, y, W - 68, 46, def.icon, `${def.name} ${acc.star}★`, user.equippedAccessory === acc.uid ? '装备中' : def.desc, def.color, 'accessory_' + def.id, 62);
-    drawButton('equipacc', user.equippedAccessory === acc.uid ? '卸下' : '装备', W - 92, y + 8, 48, 30, false, { uid: acc.uid });
+  const viewX = 34;
+  const viewY = 126;
+  const viewW = W - 68;
+  const viewH = Math.max(240, H - viewY - 94);
+  const cardH = 86;
+  const gap = 10;
+  const sorted = [...user.accessories].sort((a, b) => {
+    if (a.uid === user.equippedAccessory) return -1;
+    if (b.uid === user.equippedAccessory) return 1;
+    return clampAccessoryStar(b.star) - clampAccessoryStar(a.star) || a.type.localeCompare(b.type);
   });
+  const contentH = Math.max(viewH, (sorted.length || 1) * (cardH + gap) + 8);
+  accessoryScroll = Math.max(0, Math.min(accessoryScroll, Math.max(0, contentH - viewH)));
+  drawRect(viewX, viewY, viewW, viewH, '#10121f', '#33344f');
+  addTarget('accscroll', viewX, viewY, viewW, viewH);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(viewX, viewY, viewW, viewH);
+  ctx.clip();
+  if (!sorted.length) {
+    drawText('暂无首饰，可在钻石抽奖第三期获得', W / 2, viewY + 44, 14, '#cccccc', 'center');
+    ACCESSORIES.forEach((def, i) => {
+      const y = viewY + 84 + i * 58;
+      drawListItem(viewX + 12, y, viewW - 24, 48, def.icon, def.name, def.desc, def.color, 'accessory_' + def.id);
+    });
+  }
+  sorted.forEach((acc, i) => {
+    const def = accessoryDef(acc.type);
+    if (!def) return;
+    const y = viewY + 8 + i * (cardH + gap) - accessoryScroll;
+    if (y > viewY + viewH || y + cardH < viewY) return;
+    const active = user.equippedAccessory === acc.uid;
+    const material = findAccessoryUpgradeMaterial(acc);
+    const cost = accessoryUpgradeCost(acc.star);
+    const chance = accessoryUpgradeChance(acc.star);
+    const canUpgrade = !!material && acc.star < 20 && user.money >= cost;
+    drawRect(viewX + 10, y, viewW - 20, cardH, '#0d1421', active ? '#4ec9b0' : def.color);
+    drawAsset('accessory_' + def.id, viewX + 20, y + 14, 34, 34);
+    drawFittedText(`${def.name} ${clampAccessoryStar(acc.star)}★`, viewX + 62, y + 18, 14, def.color, 'left', viewW - 150);
+    drawFittedText(accessoryEffectText(acc), viewX + 62, y + 39, 10, '#9aa6b2', 'left', viewW - 150);
+    const matText = acc.star >= 20 ? '已满星' : `消耗 ${cost} 金币 + 同款同星 ×1${material ? '' : '（缺材料）'}`;
+    drawFittedText(matText, viewX + 62, y + 60, 10, canUpgrade ? '#e8d28a' : '#777777', 'left', viewW - 150);
+    drawButton('equipacc', active ? '卸下' : '装备', W - 132, y + 12, 42, 28, false, { uid: acc.uid });
+    drawButton('upgradeacc', '强化', W - 84, y + 12, 42, 28, canUpgrade, { uid: acc.uid });
+  });
+  ctx.restore();
+  if (contentH > viewH) {
+    const barH = Math.max(28, viewH * viewH / contentH);
+    const barY = viewY + accessoryScroll / (contentH - viewH) * (viewH - barH);
+    drawRect(viewX + viewW - 6, barY, 4, barH, '#ffd700');
+  }
+  const statusColor = accessoryStatus.includes('失败') || accessoryStatus.includes('不足') || accessoryStatus.includes('缺少') ? '#ff5722' : '#4ec9b0';
+  drawFittedText(accessoryStatus || '拖动列表浏览首饰，强化需要同款同星首饰作为材料', W / 2, viewY + viewH + 24, 12, statusColor, 'center', W - 72);
+}
+async function fetchLeaderboard() {
+  rankStatus = '排行榜连接中...';
+  try {
+    const rows = await apiGet('/api/leaderboard');
+    remoteRankRows = Array.isArray(rows) ? rows : [];
+    serverOnline = true;
+    rankStatus = remoteRankRows.length ? '服务器排行榜' : '暂无排行数据';
+  } catch (err) {
+    serverOnline = false;
+    remoteRankRows = null;
+    rankStatus = `排行榜连接失败`;
+  }
 }
 function drawRankModal() {
-  const rows = [
-    { name: user.username, n: user.stats.totalCatches || 0, w: Object.values(user.dex).reduce((s, x) => s + (x.maxWeight || 0), 0) },
-    { name: 'wakaka', n: 420, w: 6890.2 },
-    { name: 'pixel', n: 180, w: 2240.6 },
-    { name: 'cocos38', n: 126, w: 1610.4 },
-  ].sort((a, b) => b.n - a.n);
+  drawSegmentTabs('ranktab', [
+    { label: '今日次数', value: 'today-catches' },
+    { label: '今日重量', value: 'today-weight' },
+  ], rankTab, 34, 126, W - 68, 28);
+  drawSegmentTabs('ranktab', [
+    { label: '累计次数', value: 'total-catches' },
+    { label: '累计重量', value: 'total-weight' },
+  ], rankTab, 34, 162, W - 68, 28);
+  const todayLocal = user.dailyStats || {};
+  const localRows = [
+    { username: user.username, totalCatches: user.stats.totalCatches || 0, totalWeight: user.stats.totalWeight || 0, todayCatches: todayLocal.catches || 0, todayWeight: todayLocal.weight || 0 },
+  ];
+  const rows = (remoteRankRows || localRows).map((r) => ({ ...r, name: r.name || r.username }));
+  const sortKey = rankTab === 'today-weight' ? 'todayWeight' : rankTab === 'total-weight' ? 'totalWeight' : rankTab === 'today-catches' ? 'todayCatches' : 'totalCatches';
+  const isWeight = sortKey.includes('Weight');
+  rows.sort((a, b) => b[sortKey] - a[sortKey]);
+  if (rankTab === 'today-catches') {
+    drawRect(34, 202, W - 68, 34, '#0d1421', '#555555');
+    drawFittedText('今日钓鱼数第一名可获得 5000 钻石', W / 2, 219, 12, '#ffd700', 'center', W - 88);
+  }
+  const startY = rankTab === 'today-catches' ? 248 : 206;
+  drawFittedText(rankStatus, W / 2, startY - 14, 11, serverOnline ? '#4ec9b0' : '#ffae42', 'center', W - 90);
   rows.forEach((r, i) => {
-    drawListItem(34, 140 + i * 54, W - 68, 44, String(i + 1), r.name, `累计 ${r.n} 次 · ${r.w.toFixed(1)}kg`, i === 0 ? '#ffd700' : '#ffffff', i === 0 ? 'ui_rank' : '');
+    const y = startY + i * 54;
+    const isMe = r.name === user.username;
+    const color = i === 0 ? '#ffd700' : isMe ? '#4ec9b0' : '#ffffff';
+    const value = isWeight ? `${r[sortKey].toFixed(1)}kg` : `${r[sortKey]} 次`;
+    drawRect(34, y, W - 68, 44, '#0d1421', isMe ? '#4ec9b0' : '#33344f');
+    drawText(i === 0 ? '冠' : String(i + 1), 58, y + 22, 16, color, 'center');
+    drawFittedText(r.name, 86, y + 16, 14, color, 'left', W - 180);
+    drawFittedText(isWeight ? '重量排行' : '次数排行', 86, y + 33, 10, '#9aa6b2', 'left', W - 180);
+    drawFittedText(value, W - 50, y + 22, 13, '#ffd700', 'right', 86);
   });
 }
 function drawGachaModal() {
-  drawButton('gachatab', '金币抽奖', 40, 132, 92, 32, gachaTab === 'coins', { tab: 'coins' });
-  drawButton('gachatab', '钻石抽奖', 140, 132, 92, 32, gachaTab === 'diamonds', { tab: 'diamonds' });
-  drawButton('gachaseason', '第一期', 40, 174, 74, 30, gachaSeason === 1, { season: 1 });
-  drawButton('gachaseason', '第二期', 122, 174, 74, 30, gachaSeason === 2, { season: 2 });
-  if (gachaTab === 'diamonds') drawButton('gachaseason', '第三期', 204, 174, 74, 30, gachaSeason === 3, { season: 3 });
-  const prizes = gachaTab === 'coins'
-    ? (gachaSeason === 1 ? ['神秘暗夜竿 0.1%', '熊猫竿 1%', '1000金币 8.9%', '1金币 90%'] : ['宠物奖池', '10钻石 10%', '1金币 89.58%'])
-    : (gachaSeason === 1 ? ['火麒麟/绿玄武 各1%', '10钻石 8%', '1000金币 90%'] : gachaSeason === 2 ? ['耳机竿 0.01%', 'Candy竿 0.99%', '10钻石 10%', '1000金币 90%'] : ['鳞光坠 10%', '潮汐环 10%', '星砂针 10%', '100金币 70%']);
-  prizes.forEach((p, i) => drawListItem(40, 218 + i * 44, W - 80, 34, '奖', p, '', '#ffd700', 'ui_gacha'));
-  drawButton('gacha', gachaTab === 'coins' ? '单抽金币' : '单抽钻石', 44, H - 142, 112, 36, true, { count: 1 });
-  drawButton('gacha', '十连抽', W - 156, H - 142, 112, 36, true, { count: 10 });
+  drawSegmentTabs('gachatab', [
+    { label: '金币抽奖', value: 'coins', data: { tab: 'coins' } },
+    { label: '钻石抽奖', value: 'diamonds', data: { tab: 'diamonds' } },
+  ], gachaTab, 34, 126, W - 68, 30);
+  const seasons = gachaTab === 'diamonds'
+    ? [{ label: '第一期', value: 1, data: { season: 1 } }, { label: '第二期', value: 2, data: { season: 2 } }, { label: '第三期', value: 3, data: { season: 3 } }]
+    : [{ label: '第一期', value: 1, data: { season: 1 } }, { label: '第二期', value: 2, data: { season: 2 } }];
+  drawSegmentTabs('gachaseason', seasons, gachaSeason, 34, 166, W - 68, 28);
+  const prizes = getGachaPrizes();
+  const prizeCols = W <= 300 ? 1 : 2;
+  const prizeGap = 8;
+  const prizeX = 40;
+  const prizeW = Math.floor((W - 80 - prizeGap * (prizeCols - 1)) / prizeCols);
+  const prizeH = W <= 340 ? 52 : 58;
+  const prizeTop = 210;
+  const prizeRows = Math.ceil(prizes.length / prizeCols);
+  const prizeBottom = prizeTop + prizeRows * prizeH + Math.max(0, prizeRows - 1) * prizeGap;
+  const resultCount = modal.result ? Math.min(10, modal.result.length) : 0;
+  const resultCols = Math.min(W <= 360 ? 4 : 5, resultCount || 1);
+  const resultRows = Math.ceil((resultCount || 1) / resultCols);
+  const resultCellH = 54;
+  const resultBlockH = resultCount ? resultRows * resultCellH + Math.max(0, resultRows - 1) * 6 : 0;
+  const idealButtonY = prizeBottom + 18;
+  const resultAwareButtonY = resultCount ? H - resultBlockH - 72 : H - 76;
+  const buttonY = Math.max(prizeBottom + 12, Math.min(idealButtonY, resultAwareButtonY));
+  drawRect(34, 202, W - 68, Math.max(64, prizeBottom - 202 + 10), '#111827', '#33344f');
+  prizes.forEach((p, i) => {
+    const x = prizeX + (i % prizeCols) * (prizeW + prizeGap);
+    const y = prizeTop + Math.floor(i / prizeCols) * (prizeH + prizeGap);
+    drawPrizeCard(p, x, y, prizeW, prizeH);
+  });
+  drawButton('gacha', gachaTab === 'coins' ? '单抽金币' : '单抽钻石', 44, buttonY, 112, 36, true, { count: 1 });
+  drawButton('gacha', '十连抽', W - 156, buttonY, 112, 36, true, { count: 10 });
   if (modal.result) {
-    modal.result.slice(0, 8).forEach((r, i) => {
-      const y = H - 98 + i * 18;
-      if (!drawAsset(r.asset, 44, y - 8, 16, 16)) drawText(r.icon, 52, y, 12, '#ffd700', 'center');
-      drawText(r.text, 66, y, 12, '#ffffff');
+    const result = modal.result.slice(0, resultCount);
+    const cols = resultCols;
+    const gap = 6;
+    const cellW = Math.floor((W - 80 - gap * (cols - 1)) / cols);
+    const cellH = resultCellH;
+    const y0 = buttonY + 50;
+    result.forEach((r, i) => {
+      const x = 40 + (i % cols) * (cellW + gap);
+      const y = y0 + Math.floor(i / cols) * (cellH + 6);
+      const rarity = gachaResultRarity(r);
+      const color = rarity === 'ultimate' ? '#ff6b00' : rarity === 'legendary' ? '#8b5cf6' : rarity === 'rare' ? '#4ec9b0' : rarity === 'diamond' ? '#66e6ff' : rarity === 'coin' ? '#ffd700' : '#555555';
+      drawRect(x, y, cellW, cellH, '#0d1421', color);
+      if (!drawAsset(r.asset, x + cellW / 2 - 12, y + 7, 24, 24)) drawText(r.icon, x + cellW / 2, y + 19, 14, color, 'center');
+      drawFittedText(r.text, x + cellW / 2, y + 42, 9, color, 'center', cellW - 6);
     });
   }
 }
 function drawRedeemModal() {
-  drawText('微信小游戏版提供快捷兑换按钮', W / 2, 150, 14, '#cccccc', 'center');
-  drawButton('redeemcode', 'WELCOME2024', 50, 190, W - 100, 36, true, { code: 'WELCOME2024' });
-  drawButton('redeemcode', 'FISHING666', 50, 236, W - 100, 36, true, { code: 'FISHING666' });
-  drawButton('redeemcode', 'WAKAKA666', 50, 282, W - 100, 36, true, { code: 'WAKAKA666' });
+  drawText('输入兑换码获取金币奖励', W / 2, 150, 14, '#cccccc', 'center');
+  const inputX = 50;
+  const inputY = 184;
+  const buttonW = 76;
+  drawRect(inputX, inputY, W - 100 - buttonW - 8, 38, '#0d1421', '#ffd700');
+  drawFittedText(redeemInput || '输入兑换码', inputX + (W - 100 - buttonW - 8) / 2, inputY + 19, 13, redeemInput ? '#ffffff' : '#777777', 'center', W - 130 - buttonW);
+  addTarget('redeeminput', inputX, inputY, W - 100 - buttonW - 8, 38);
+  drawButton('redeemsubmit', '兑换', W - 50 - buttonW, inputY, buttonW, 38, true);
+  const statusColor = redeemStatusKind === 'success' ? '#4ec9b0' : redeemStatusKind === 'error' ? '#ff5722' : '#ffae42';
+  drawFittedText(redeemStatus || '示例：WELCOME2024 / FISHING666 / WAKAKA666', W / 2, 250, 13, statusColor, 'center', W - 100);
 }
 function drawShareModal() {
   drawText('点击下方按钮复制分享口令', W / 2, 160, 14, '#cccccc', 'center');
   drawButton('sharecopy', '复制分享口令并领奖励', 54, 205, W - 108, 40, true);
   drawText('每天首次分享奖励 10 金币', W / 2, 270, 14, '#ffd700', 'center');
 }
+function drawLogsModal() {
+  const top = 126;
+  const controlsY = top;
+  drawButton('logscroll', '↑', 34, controlsY, 42, 28, true, { dir: 1 });
+  drawButton('logscroll', '↓', 84, controlsY, 42, 28, true, { dir: -1 });
+  drawButton('logclear', '清空', W - 100, controlsY, 66, 28, false);
+  drawFittedText(`共 ${debugLogs.length} 条，显示最近日志`, W / 2, controlsY + 14, 11, '#9aa6b2', 'center', W - 230);
+
+  const areaX = 28;
+  const areaY = top + 40;
+  const areaW = W - 56;
+  const areaH = H - areaY - 54;
+  const lineH = 22;
+  const visible = Math.max(1, Math.floor((areaH - 12) / lineH));
+  logScroll = Math.max(0, Math.min(logScroll, Math.max(0, debugLogs.length - visible)));
+  const start = Math.max(0, debugLogs.length - visible - logScroll);
+  const rows = debugLogs.slice(start, start + visible);
+  drawRect(areaX, areaY, areaW, areaH, '#080b12', '#33344f');
+  if (!rows.length) {
+    drawFittedText('暂无日志，进行登录、排行、抽奖等操作后会出现请求记录', W / 2, areaY + 40, 12, '#777777', 'center', areaW - 28);
+    return;
+  }
+  rows.forEach((entry, i) => {
+    const y = areaY + 10 + i * lineH;
+    const color = entry.level === 'error' ? '#ff5722'
+      : entry.level === 'warn' ? '#ffae42'
+      : entry.level === 'request' ? '#66e6ff'
+      : entry.level === 'response' ? '#4ec9b0'
+      : '#dbeafe';
+    drawFittedText(`${entry.time} ${entry.level}`, areaX + 8, y + 10, 9, color, 'left', 86);
+    drawFittedText(entry.text, areaX + 94, y + 10, 9, '#f8fafc', 'left', areaW - 106);
+  });
+}
 function drawResultModal() {
   const c = modal.catch;
-  const cardW = Math.min(W - 72, 300);
-  const cardH = 188;
+  const rewardLines = [];
+  if (c.kind === 'character_shard') {
+    const character = CHARACTERS.find((ch) => ch.id === c.characterId);
+    rewardLines.push({ label: '角色', value: character ? character.name : '角色碎片', color: '#f59e0b' });
+    rewardLines.push({ label: '碎片进度', value: `${c.shardProgress || 0} / ${c.shardsRequired || 10}`, color: '#f59e0b' });
+    if (c.unlockedCharacter) rewardLines.push({ label: '解锁角色', value: character ? character.name : c.unlockedCharacter, color: '#ffd700' });
+  }
+  if (c.weight) rewardLines.push({ label: '重量', value: `${c.weight} kg`, color: '#ffffff' });
+  if (c.item && c.item.price && !c.diamondValue) rewardLines.push({ label: '单价', value: `${c.item.price} 金/kg`, color: '#9aa6b2' });
+  if (c.value) rewardLines.push({ label: '金币', value: `+${c.value}`, color: '#ffd700' });
+  if (c.diamondValue) rewardLines.push({ label: '售卖钻石', value: `+${c.diamondValue}`, color: '#66e6ff' });
+  if (c.diamonds) rewardLines.push({ label: '额外钻石', value: `+${c.diamonds}`, color: '#66e6ff' });
+  if (c.petBonusCoins) rewardLines.push({ label: '宠物加成', value: `+${c.petBonusCoins} 金币`, color: '#4ec9b0' });
+  if (c.petBonusDiamonds) rewardLines.push({ label: '宠物加成', value: `+${c.petBonusDiamonds} 钻石`, color: '#4ec9b0' });
+  (c.baitDrops || []).forEach((drop) => {
+    const bait = BAITS[drop.id];
+    rewardLines.push({ label: '鱼饵掉落', value: `${bait ? bait.name : drop.id} ×${drop.count}`, color: bait ? bait.color : '#ffd700' });
+  });
+  if ((c.petBonusCoins || c.petBonusDiamonds) && (c.totalCoins || 0) > 0) rewardLines.push({ label: '金币合计', value: `+${c.totalCoins}`, color: '#ffd700' });
+  if ((c.petBonusCoins || c.petBonusDiamonds) && (c.totalDiamonds || 0) > 0) rewardLines.push({ label: '钻石合计', value: `+${c.totalDiamonds}`, color: '#66e6ff' });
+  if (!rewardLines.length) rewardLines.push({ label: '奖励', value: '已收入图鉴', color: '#4ec9b0' });
+  const cardW = Math.min(W - 56, 340);
+  const cardH = Math.min(H - MINI_SAFE_TOP - 72, Math.max(232, 170 + rewardLines.length * 24));
   const x = (W - cardW) / 2;
-  const y = Math.max(MINI_SAFE_TOP + 96, H * .28);
+  const y = Math.max(MINI_SAFE_TOP + 56, (H - cardH) / 2);
   drawRect(0, 0, W, H, 'rgba(0,0,0,.45)');
   drawRect(x, y, cardW, cardH, '#1a1a2e', '#ffd700');
   drawButton('modal:close', '×', x + cardW - 42, y + 10, 30, 30, false);
   drawFishPixelIcon(W / 2, y + 54, c.item, true);
   drawText(c.item.name, W / 2, y + 92, 20, RARITY_COLOR[c.rarity], 'center');
-  drawText(`${RARITY_NAME[c.rarity]} ${c.weight ? c.weight + 'kg' : ''}`, W / 2, y + 122, 14, '#ffffff', 'center');
-  drawText(`获得 ${c.value ? c.value + '金币' : ''}${c.diamondValue ? c.diamondValue + '钻石' : ''}`, W / 2, y + 148, 14, '#ffd700', 'center');
+  drawText(`★ ${RARITY_NAME[c.rarity]} ★`, W / 2, y + 120, 14, RARITY_COLOR[c.rarity], 'center');
+  const listX = x + 24;
+  const listY = y + 142;
+  const rowH = 22;
+  rewardLines.forEach((line, i) => {
+    const ry = listY + i * rowH;
+    drawRect(listX, ry - 9, cardW - 48, 18, i % 2 ? '#101827' : '#0d1421');
+    drawFittedText(line.label, listX + 10, ry, 11, '#9aa6b2', 'left', cardW * .45);
+    drawFittedText(line.value, x + cardW - 34, ry, 12, line.color, 'right', cardW * .45);
+  });
   drawButton('modal:close', '关闭', W / 2 - 48, y + cardH - 42, 96, 30, true);
 }
 function render() {
@@ -1095,13 +1965,20 @@ function loop() {
 function handleTap(x, y) {
   const target = targets.slice().reverse().find((t) => hitTarget(x, y, t));
   if (target) {
+    target.tapX = x;
+    target.tapY = y;
     handleAction(target);
+    return;
+  }
+  if (baitDropdownOpen) {
+    baitDropdownOpen = false;
     return;
   }
   if (!modal && state.phase === 'hooked') startHitbar();
 }
 function handleAction(t) {
   if (t.id.startsWith('top:')) {
+    baitDropdownOpen = false;
     const type = t.id.slice(4);
     if (type === 'vip') {
       user.vipAuto = !user.vipAuto;
@@ -1115,15 +1992,31 @@ function handleAction(t) {
       saveUser();
     } else {
       modal = { type };
-      if (type === 'dex' && BAITS[user.currentBait]) activeDexBait = user.currentBait;
+      if (type === 'dex' && BAITS[user.currentBait] && !BAITS[user.currentBait].hideDex) activeDexBait = user.currentBait;
       if (type === 'gacha') {
         gachaTab = 'coins';
         gachaSeason = 1;
       }
+      if (type === 'redeem') {
+        redeemInput = '';
+        redeemStatus = '';
+        redeemStatusKind = '';
+      }
+      if (type === 'rank') fetchLeaderboard();
+      if (type === 'logs') logScroll = 0;
     }
     return;
   }
   if (t.id === 'cast') cast();
+  else if (t.id === 'baittoggle') {
+    if (state.phase !== 'idle') {
+      status = '钓鱼中不能切换鱼饵';
+      baitDropdownOpen = false;
+    } else {
+      baitDropdownOpen = !baitDropdownOpen;
+    }
+  }
+  else if (t.id === 'baitselect') selectBait(t.data.id);
   else if (t.id === 'baitprev') changeBait(-1);
   else if (t.id === 'baitnext') changeBait(1);
   else if (t.id === 'mobile-action') {
@@ -1148,28 +2041,25 @@ function handleAction(t) {
   } else if (t.id === 'equipacc') {
     user.equippedAccessory = user.equippedAccessory === t.data.uid ? null : t.data.uid;
     saveUser();
+  } else if (t.id === 'upgradeacc') {
+    upgradeAccessory(t.data.uid);
+  } else if (t.id === 'accscroll') {
+    accessoryDrag = { y: t.tapY || 0, scroll: accessoryScroll };
   } else if (t.id === 'gachatab') {
     gachaTab = t.data.tab;
     gachaSeason = 1;
     modal.result = null;
+  } else if (t.id === 'ranktab') {
+    rankTab = t.data.value;
   } else if (t.id === 'gachaseason') {
     gachaSeason = t.data.season;
     modal.result = null;
   } else if (t.id === 'gacha') {
     doGacha(t.data.count);
-  } else if (t.id === 'redeemcode') {
-    const code = t.data.code;
-    const usedKey = `redeem_${code}`;
-    if (wx.getStorageSync(usedKey)) {
-      status = '该兑换码已使用';
-    } else {
-      if (code === 'WAKAKA666') user.diamonds += 10000;
-      else if (code === 'WELCOME2024') user.money += 500;
-      else user.money += 200;
-      wx.setStorageSync(usedKey, true);
-      status = '兑换成功';
-      saveUser();
-    }
+  } else if (t.id === 'redeeminput') {
+    askRedeemCode();
+  } else if (t.id === 'redeemsubmit') {
+    redeemCode(redeemInput);
   } else if (t.id === 'sharecopy') {
     wx.setClipboardData({ data: '像素钓鱼小游戏，快来一起钓鱼！' });
     const today = new Date().toDateString();
@@ -1179,13 +2069,41 @@ function handleAction(t) {
       saveUser();
     }
     status = '分享口令已复制';
+  } else if (t.id === 'logscroll') {
+    const visible = Math.max(1, Math.floor((H - 126 - 40 - 54 - 12) / 22));
+    const maxScroll = Math.max(0, debugLogs.length - visible);
+    logScroll = Math.max(0, Math.min(maxScroll, logScroll + (t.data.dir > 0 ? visible : -visible)));
+  } else if (t.id === 'logclear') {
+    debugLogs.length = 0;
+    logScroll = 0;
+    addDebugLog('info', ['logs cleared']);
   }
 }
-wx.onTouchEnd((event) => {
+function handleTouchMove(x, y) {
+  if (!accessoryDrag || !modal || modal.type !== 'accessory') return;
+  const viewY = 126;
+  const viewH = Math.max(240, H - viewY - 94);
+  const cardH = 86;
+  const gap = 10;
+  const contentH = Math.max(viewH, (user.accessories.length || 1) * (cardH + gap) + 8);
+  accessoryScroll = Math.max(0, Math.min(accessoryDrag.scroll - (y - accessoryDrag.y), Math.max(0, contentH - viewH)));
+}
+function handleTouchEnd() {
+  accessoryDrag = null;
+}
+const onTouchStart = wx.onTouchStart || wx.onTouchEnd;
+onTouchStart((event) => {
   const touch = event.changedTouches && event.changedTouches[0];
   if (touch) handleTap(touch.clientX, touch.clientY);
 });
+if (wx.onTouchMove) wx.onTouchMove((event) => {
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (touch) handleTouchMove(touch.clientX, touch.clientY);
+});
+if (wx.onTouchEnd) wx.onTouchEnd(() => handleTouchEnd());
 wx.onShow(() => {
   user = loadUser();
+  loginServer();
 });
+loginServer();
 loop();

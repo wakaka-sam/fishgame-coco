@@ -46,6 +46,7 @@ const project = new ci.Project({
 const setting = {
   es6: true,
   minify: true,
+  urlCheck: false,
   ...config.setting,
 };
 

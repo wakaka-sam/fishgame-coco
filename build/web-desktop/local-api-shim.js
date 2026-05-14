@@ -234,7 +234,12 @@
 
   window.fetch = async function localFetch(input, init = {}) {
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
-    if (!url.pathname.startsWith('/api/')) return nativeFetch(input, init);
+    const remoteApiBase = window.FISH_API_BASE || '';
+    if (remoteApiBase && url.origin === location.origin && url.pathname.startsWith('/api/')) {
+      const remoteUrl = new URL(url.pathname + url.search, remoteApiBase);
+      return nativeFetch(remoteUrl.toString(), init);
+    }
+    if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) return nativeFetch(input, init);
 
     try {
       if (url.pathname === '/api/leaderboard') return jsonResponse(getLeaderboard());

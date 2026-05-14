@@ -10,7 +10,7 @@
 - `src/runtime/game.js`: Web 与微信小游戏共用的单一 Canvas 运行时源。改 UI/交互时优先改这里。
 - `build/web-cocos`: 由 `src/runtime/game.js` 生成的 Web 版本，使用 `wx-web-shim.js` 适配浏览器。
 - `build/wechatgame`: 由 `src/runtime/game.js` 生成的微信小游戏版本。
-- `build/web-desktop`: 已输出的静态 Web 版本，可直接部署或本地访问。该版本直接复用原项目的 `index.html`、`style.css`、`data.js`、`game.js` 和图片资源，以保持原始美术风格、顶部 tab、按钮位置、弹窗和命中条交互一致；`local-api-shim.js` 负责把原服务端 API 转为浏览器本地存档。
+- `build/web-desktop`: 已输出的静态 Web 版本，可直接部署或本地访问。该版本直接复用原项目的 `index.html`、`style.css`、`data.js`、`game.js` 和图片资源，以保持原始美术风格、顶部 tab、按钮位置、弹窗和命中条交互一致；默认通过 `window.FISH_API_BASE` 接入 `https://fishapi.wakaka007.cn`，未配置时 `local-api-shim.js` 会回落到浏览器本地存档。
 
 ## 构建统一 Web / 微信运行时
 
