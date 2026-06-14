@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2050" viewBox="0 0 1600 2050">
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .title { font: 700 36px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #172033; }
+      .subtitle { font: 500 18px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #556070; }
+      .laneTitle { font: 700 23px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #14213d; }
+      .nodeText { font: 500 17px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #1f2a3d; }
+      .smallText { font: 500 14px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #4e5b6d; }
+      .node { fill: #ffffff; stroke: #8aa0bd; stroke-width: 2; rx: 12; }
+      .start { fill: #e7f8ef; stroke: #35a66b; }
+      .decision { fill: #fff5db; stroke: #e6a700; }
+      .system { fill: #edf2ff; stroke: #5b7cfa; }
+      .danger { fill: #fff1f0; stroke: #f05b53; }
+      .done { fill: #e9fbff; stroke: #00a7c8; }
+      .lane { fill: #ffffff; stroke: #d6deeb; stroke-width: 2; rx: 18; }
+      .arrow { fill: none; stroke: #596579; stroke-width: 2.2; marker-end: url(#arrow); }
+      .arrowSoft { fill: none; stroke: #8792a4; stroke-width: 1.8; marker-end: url(#arrowSoft); }
+      .dash { fill: none; stroke: #8792a4; stroke-width: 1.8; stroke-dasharray: 7 7; marker-end: url(#arrowSoft); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#596579"/>
+    </marker>
+    <marker id="arrowSoft" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M1,1 L8,5 L1,9 Z" fill="#8792a4"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="2050"/>
+  <text class="title" x="80" y="70">钓鱼游戏优化推进流程图</text>
+  <text class="subtitle" x="80" y="105">基于 fishgame-coco 当前结构：src/runtime/game.js 为 Web / 微信小游戏共用运行时</text>
+
+  <rect class="node start" x="630" y="145" width="340" height="68"/>
+  <text class="nodeText" x="800" y="174" text-anchor="middle">开始优化</text>
+  <text class="smallText" x="800" y="198" text-anchor="middle">明确目标、版本、验收范围</text>
+
+  <rect class="node" x="585" y="255" width="430" height="76"/>
+  <text class="nodeText" x="800" y="285" text-anchor="middle">读取项目现状</text>
+  <text class="smallText" x="800" y="310" text-anchor="middle">README / game.js / FishingGame.ts / game-data.ts</text>
+
+  <polygon class="decision" points="800,380 1005,455 800,530 595,455"/>
+  <text class="nodeText" x="800" y="446" text-anchor="middle">先判断优化类型</text>
+  <text class="smallText" x="800" y="471" text-anchor="middle">玩法 / 数值 / 内容 / UI / 平台 / 存档</text>
+
+  <path class="arrow" d="M800 213 L800 255"/>
+  <path class="arrow" d="M800 331 L800 380"/>
+
+  <rect class="lane" x="70" y="590" width="700" height="420"/>
+  <text class="laneTitle" x="105" y="635">A. 主玩法手感与状态机</text>
+  <rect class="node start" x="110" y="670" width="170" height="60"/>
+  <text class="nodeText" x="195" y="706" text-anchor="middle">idle 待机</text>
+  <rect class="node" x="330" y="670" width="180" height="60"/>
+  <text class="nodeText" x="420" y="697" text-anchor="middle">检查鱼饵</text>
+  <text class="smallText" x="420" y="718" text-anchor="middle">不足则引导商店</text>
+  <rect class="node" x="560" y="670" width="170" height="60"/>
+  <text class="nodeText" x="645" y="706" text-anchor="middle">waiting 等待</text>
+
+  <rect class="node" x="110" y="790" width="170" height="60"/>
+  <text class="nodeText" x="195" y="826" text-anchor="middle">hooked 上钩</text>
+  <rect class="node" x="330" y="790" width="180" height="60"/>
+  <text class="nodeText" x="420" y="817" text-anchor="middle">startHitbar</text>
+  <text class="smallText" x="420" y="838" text-anchor="middle">rollCatch 生成目标</text>
+  <rect class="node" x="560" y="790" width="170" height="60"/>
+  <text class="nodeText" x="645" y="826" text-anchor="middle">reeling 收线</text>
+
+  <rect class="node done" x="205" y="910" width="200" height="60"/>
+  <text class="nodeText" x="305" y="936" text-anchor="middle">applyCatch 结算</text>
+  <text class="smallText" x="305" y="957" text-anchor="middle">金币/钻石/图鉴/历史</text>
+  <rect class="node danger" x="470" y="910" width="220" height="60"/>
+  <text class="nodeText" x="580" y="936" text-anchor="middle">失败分支</text>
+  <text class="smallText" x="580" y="957" text-anchor="middle">超时、未命中、鱼逃脱</text>
+
+  <path class="arrowSoft" d="M280 700 L330 700"/>
+  <path class="arrowSoft" d="M510 700 L560 700"/>
+  <path class="arrowSoft" d="M645 730 C645 760 195 760 195 790"/>
+  <path class="arrowSoft" d="M280 820 L330 820"/>
+  <path class="arrowSoft" d="M510 820 L560 820"/>
+  <path class="arrowSoft" d="M645 850 C645 890 370 890 335 910"/>
+  <path class="dash" d="M645 850 C700 875 700 900 690 920"/>
+
+  <rect class="lane" x="830" y="590" width="700" height="420"/>
+  <text class="laneTitle" x="865" y="635">B. 经济数值与长期成长</text>
+  <rect class="node system" x="875" y="670" width="250" height="68"/>
+  <text class="nodeText" x="1000" y="697" text-anchor="middle">鱼饵与鱼池</text>
+  <text class="smallText" x="1000" y="720" text-anchor="middle">BAITS / TRASH / TREASURE</text>
+  <rect class="node system" x="1230" y="670" width="250" height="68"/>
+  <text class="nodeText" x="1355" y="697" text-anchor="middle">稀有度与命中难度</text>
+  <text class="smallText" x="1355" y="720" text-anchor="middle">weightedRarity / HITS_BY_RARITY</text>
+  <rect class="node system" x="875" y="790" width="250" height="68"/>
+  <text class="nodeText" x="1000" y="817" text-anchor="middle">奖励公式</text>
+  <text class="smallText" x="1000" y="840" text-anchor="middle">重量 * price + 特殊钻石</text>
+  <rect class="node system" x="1230" y="790" width="250" height="68"/>
+  <text class="nodeText" x="1355" y="817" text-anchor="middle">加成系统</text>
+  <text class="smallText" x="1355" y="840" text-anchor="middle">宠物 bonus / 首饰效果</text>
+  <rect class="node done" x="1025" y="910" width="310" height="60"/>
+  <text class="nodeText" x="1180" y="936" text-anchor="middle">收益曲线验收</text>
+  <text class="smallText" x="1180" y="957" text-anchor="middle">新手不卡死，稀有目标有追求</text>
+  <path class="arrowSoft" d="M1125 704 L1230 704"/>
+  <path class="arrowSoft" d="M1000 738 L1000 790"/>
+  <path class="arrowSoft" d="M1355 738 L1355 790"/>
+  <path class="arrowSoft" d="M1125 824 C1175 850 1180 875 1180 910"/>
+  <path class="arrowSoft" d="M1355 858 C1340 890 1295 905 1240 910"/>
+
+  <rect class="lane" x="70" y="1060" width="700" height="390"/>
+  <text class="laneTitle" x="105" y="1105">C. 内容扩展与资源接入</text>
+  <rect class="node" x="110" y="1140" width="250" height="68"/>
+  <text class="nodeText" x="235" y="1167" text-anchor="middle">新增内容设计</text>
+  <text class="smallText" x="235" y="1190" text-anchor="middle">鱼、宝藏、鱼竿、角色、宠物、首饰</text>
+  <rect class="node" x="470" y="1140" width="240" height="68"/>
+  <text class="nodeText" x="590" y="1167" text-anchor="middle">补数据表</text>
+  <text class="smallText" x="590" y="1190" text-anchor="middle">常量、奖池、解锁条件</text>
+  <rect class="node" x="110" y="1260" width="250" height="68"/>
+  <text class="nodeText" x="235" y="1287" text-anchor="middle">补资源映射</text>
+  <text class="smallText" x="235" y="1310" text-anchor="middle">registerAssets / preloadAssets</text>
+  <rect class="node" x="470" y="1260" width="240" height="68"/>
+  <text class="nodeText" x="590" y="1287" text-anchor="middle">补展示入口</text>
+  <text class="smallText" x="590" y="1310" text-anchor="middle">图鉴、抽奖、装备、结果弹窗</text>
+  <rect class="node done" x="235" y="1370" width="290" height="52"/>
+  <text class="nodeText" x="380" y="1403" text-anchor="middle">重复获得与存档兼容验收</text>
+  <path class="arrowSoft" d="M360 1174 L470 1174"/>
+  <path class="arrowSoft" d="M590 1208 C590 1235 235 1235 235 1260"/>
+  <path class="arrowSoft" d="M360 1294 L470 1294"/>
+  <path class="arrowSoft" d="M590 1328 C590 1350 455 1360 420 1370"/>
+
+  <rect class="lane" x="830" y="1060" width="700" height="390"/>
+  <text class="laneTitle" x="865" y="1105">D. UI、触控与平台适配</text>
+  <rect class="node" x="875" y="1140" width="250" height="68"/>
+  <text class="nodeText" x="1000" y="1167" text-anchor="middle">界面分层</text>
+  <text class="smallText" x="1000" y="1190" text-anchor="middle">topbar / scene / gamebar / modal</text>
+  <rect class="node" x="1230" y="1140" width="250" height="68"/>
+  <text class="nodeText" x="1355" y="1167" text-anchor="middle">触控目标</text>
+  <text class="smallText" x="1355" y="1190" text-anchor="middle">targets / handleTap / handleAction</text>
+  <rect class="node" x="875" y="1260" width="250" height="68"/>
+  <text class="nodeText" x="1000" y="1287" text-anchor="middle">小屏与安全区</text>
+  <text class="smallText" x="1000" y="1310" text-anchor="middle">DPR / safeArea / 文字截断</text>
+  <rect class="node" x="1230" y="1260" width="250" height="68"/>
+  <text class="nodeText" x="1355" y="1287" text-anchor="middle">性能与资源兜底</text>
+  <text class="smallText" x="1355" y="1310" text-anchor="middle">图片加载失败、渲染频率、遮挡</text>
+  <rect class="node done" x="1035" y="1370" width="290" height="52"/>
+  <text class="nodeText" x="1180" y="1403" text-anchor="middle">真机可用性验收</text>
+  <path class="arrowSoft" d="M1125 1174 L1230 1174"/>
+  <path class="arrowSoft" d="M1000 1208 L1000 1260"/>
+  <path class="arrowSoft" d="M1355 1208 L1355 1260"/>
+  <path class="arrowSoft" d="M1125 1294 C1170 1330 1180 1350 1180 1370"/>
+  <path class="arrowSoft" d="M1355 1328 C1330 1355 1265 1368 1220 1370"/>
+
+  <rect class="lane" x="70" y="1500" width="1460" height="330"/>
+  <text class="laneTitle" x="105" y="1545">E. 统一开发、构建、验证、发布</text>
+  <rect class="node start" x="110" y="1590" width="210" height="62"/>
+  <text class="nodeText" x="215" y="1627" text-anchor="middle">修改共用源</text>
+  <text class="smallText" x="215" y="1647" text-anchor="middle">src/runtime/game.js</text>
+  <rect class="node" x="380" y="1590" width="210" height="62"/>
+  <text class="nodeText" x="485" y="1627" text-anchor="middle">同步构建</text>
+  <text class="smallText" x="485" y="1647" text-anchor="middle">npm run build:unified</text>
+  <rect class="node" x="650" y="1590" width="210" height="62"/>
+  <text class="nodeText" x="755" y="1627" text-anchor="middle">Web 冒烟</text>
+  <text class="smallText" x="755" y="1647" text-anchor="middle">serve:web / 浏览器验证</text>
+  <rect class="node" x="920" y="1590" width="210" height="62"/>
+  <text class="nodeText" x="1025" y="1627" text-anchor="middle">微信预览</text>
+  <text class="smallText" x="1025" y="1647" text-anchor="middle">preview / 真机验证</text>
+  <polygon class="decision" points="1290,1578 1430,1621 1290,1664 1150,1621"/>
+  <text class="nodeText" x="1290" y="1616" text-anchor="middle">验收通过?</text>
+  <text class="smallText" x="1290" y="1638" text-anchor="middle">功能 / 数值 / UI / 存档</text>
+
+  <rect class="node danger" x="845" y="1725" width="250" height="58"/>
+  <text class="nodeText" x="970" y="1759" text-anchor="middle">记录问题并回到分类</text>
+  <rect class="node done" x="1195" y="1725" width="250" height="58"/>
+  <text class="nodeText" x="1320" y="1759" text-anchor="middle">版本说明与发布</text>
+
+  <path class="arrow" d="M320 1621 L380 1621"/>
+  <path class="arrow" d="M590 1621 L650 1621"/>
+  <path class="arrow" d="M860 1621 L920 1621"/>
+  <path class="arrow" d="M1130 1621 L1150 1621"/>
+  <path class="arrow" d="M1290 1664 L1320 1725"/>
+  <path class="arrowSoft" d="M1150 1621 C1090 1690 1040 1710 970 1725"/>
+  <path class="dash" d="M970 1725 C710 1830 360 1660 595 455"/>
+
+  <path class="arrowSoft" d="M635 490 C365 540 260 560 230 590"/>
+  <path class="arrowSoft" d="M965 490 C1190 540 1240 560 1220 590"/>
+  <path class="arrowSoft" d="M685 520 C385 810 290 990 300 1060"/>
+  <path class="arrowSoft" d="M915 520 C1230 820 1300 980 1240 1060"/>
+  <path class="arrowSoft" d="M800 530 L800 1500"/>
+
+  <text class="subtitle" x="80" y="1900">关键原则：先稳定主循环，再调数值与内容，最后做 UI、平台、存档与发布验证。每轮都要回到统一验收清单。</text>
+  <text class="smallText" x="80" y="1935">验收清单：抛竿/上钩/收线/失败/结算走通；鱼饵和货币不足有反馈；弹窗不遮挡；旧存档 normalize 后可继续；Web 与微信输出来自同一源。</text>
+</svg>

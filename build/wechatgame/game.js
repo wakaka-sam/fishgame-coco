@@ -24,7 +24,8 @@ const ACTION_COLS = W <= 700 ? 5 : 6;
 const ACTION_GAP = W <= 380 ? 3 : 4;
 const ACTION_H = W <= 380 ? 27 : 30;
 const USER_ROW_H = 26;
-const ACTION_ROWS = Math.ceil(11 / ACTION_COLS);
+const LIGHT_TOP_BUTTON_COUNT = 5;
+const ACTION_ROWS = Math.ceil(LIGHT_TOP_BUTTON_COUNT / ACTION_COLS);
 const TOPBAR_H = TOPBAR_PAD_Y * 2 + USER_ROW_H + 6 + ACTION_ROWS * ACTION_H + (ACTION_ROWS - 1) * ACTION_GAP;
 
 const RARITY_NAME = {
@@ -182,38 +183,44 @@ const ACCESSORIES = [
   { id: 'tide_bracelet', name: '潮汐环', icon: '潮', color: '#4ec9b0', desc: '减慢命中条' },
   { id: 'star_brooch', name: '星砂针', icon: '星', color: '#ffd700', desc: '综合加成' },
 ];
+const WEATHERS = [
+  { id: 'sunny', name: '晴天', icon: '晴', wait: 1, rarityBoost: 0, hitSpeed: 1, zone: 1, desc: '稳定适合练手', tip: '适合补图鉴和刷金币' },
+  { id: 'cloudy', name: '阴天', icon: '阴', wait: .92, rarityBoost: .015, hitSpeed: 1, zone: 1, desc: '鱼群更靠岸', tip: '普通鱼和稀有鱼都比较均衡' },
+  { id: 'rain', name: '雨天', icon: '雨', wait: .78, rarityBoost: .035, hitSpeed: 1.08, zone: .96, desc: '咬钩更快', tip: '适合冲稀有鱼' },
+  { id: 'fog', name: '雾天', icon: '雾', wait: .9, rarityBoost: .045, hitSpeed: 1.14, zone: .92, desc: '视野差但鱼更神秘', tip: '隐藏鱼概率略高' },
+  { id: 'storm', name: '雷暴', icon: '雷', wait: .72, rarityBoost: .06, hitSpeed: 1.25, zone: .86, desc: '高风险高收益', tip: '适合冲榜和稀有收集' },
+  { id: 'snow', name: '雪天', icon: '雪', wait: 1.12, rarityBoost: .025, hitSpeed: .95, zone: 1.05, desc: '节奏更慢', tip: '适合稳定连击' },
+];
+const SEASONS = [
+  { id: 'spring', name: '春季', icon: '春', color: '#9bd77a', desc: '鱼类活跃，适合补图鉴' },
+  { id: 'summer', name: '夏季', icon: '夏', color: '#ffd166', desc: '雷雨更多，适合冲稀有' },
+  { id: 'autumn', name: '秋季', icon: '秋', color: '#ff9f43', desc: '鱼体更肥，收益更稳' },
+  { id: 'winter', name: '冬季', icon: '冬', color: '#b8e6ff', desc: '节奏放慢，限定目标更多' },
+];
+const PROVINCES = ['广东', '浙江', '江苏', '四川', '山东', '河南', '湖北', '北京'];
+const MOCK_PROVINCE_RANKS = [
+  { name: '海风玩家', score: 16880 },
+  { name: '今天也钓鱼', score: 13240 },
+  { name: '湖边新星', score: 9650 },
+  { name: '像素钓手', score: 7420 },
+];
 const TOP_BUTTONS = [
-  ['shop', '商店'], ['dex', '图鉴'], ['rod', '鱼竿'], ['character', '角色'], ['accessory', '首饰'],
-  ['pet', '宠物'], ['rank', '排行'], ['gacha', '抽奖'], ['vip', 'VIP自动'], ['redeem', '兑换'],
-  ['share', '分享'], ['logout', '退出'],
+  ['shop', '鱼饵'], ['dex', '图鉴'], ['rod', '鱼竿'], ['weather', '天气'], ['rank', '排行'],
 ];
 const TOP_EMOJI = {
   shop: '🎁',
   dex: '📖',
   rod: '🎣',
-  character: '🧍',
-  accessory: '💍',
-  pet: '🐾',
+  weather: '☁',
   rank: '🏆',
-  gacha: '🎰',
-  vip: '',
-  redeem: '🎫',
-  share: '📤',
-  logout: '',
 };
 const BAIT_IDS = Object.keys(BAITS);
 const TOP_ASSETS = {
   shop: 'ui_shop',
   dex: 'ui_dex',
   rod: 'rod_wood',
-  character: 'character_fishing_master',
-  accessory: 'accessory_scale_charm',
-  pet: 'pet_cat',
+  weather: 'ui_share',
   rank: 'ui_rank',
-  gacha: 'ui_gacha',
-  vip: 'rod_star',
-  redeem: 'ui_redeem',
-  share: 'ui_share',
 };
 const ASSET_PATHS = {};
 const IMAGES = {};
@@ -241,6 +248,11 @@ function freshUser() {
     accessories: [],
     equippedAccessory: null,
     vipAuto: false,
+    chances: { left: 10, max: 10, shareGrants: 0, lastDate: '' },
+    province: '广东',
+    ranking: { bestScore: 0, bestFish: '', bestWeight: 0, todayScore: 0, lastScoreDate: '' },
+    calendar: { dayKey: '', season: 'spring', forecast: [] },
+    lastFailure: null,
   };
 }
 
@@ -259,9 +271,9 @@ let activeDexBait = BAIT_IDS.includes('worm') ? 'worm' : BAIT_IDS[0];
 function loadUser() {
   try {
     const saved = wx.getStorageSync(SAVE_KEY);
-    return saved ? normalize({ ...freshUser(), ...saved }) : freshUser();
+    return saved ? normalize({ ...freshUser(), ...saved }) : normalize(freshUser());
   } catch (_) {
-    return freshUser();
+    return normalize(freshUser());
   }
 }
 function normalize(u) {
@@ -276,6 +288,22 @@ function normalize(u) {
   u.characterFragments = u.characterFragments || {};
   u.ownedPets = Array.isArray(u.ownedPets) ? u.ownedPets : [];
   u.accessories = Array.isArray(u.accessories) ? u.accessories : [];
+  u.vipAuto = false;
+  u.chances = { ...f.chances, ...(u.chances || {}) };
+  u.province = PROVINCES.includes(u.province) ? u.province : f.province;
+  u.ranking = { ...f.ranking, ...(u.ranking || {}) };
+  u.calendar = ensureCalendar({ ...f.calendar, ...(u.calendar || {}) });
+  u.lastFailure = u.lastFailure || null;
+  const today = dateKey();
+  if (u.chances.lastDate !== today) {
+    u.chances.left = u.chances.max;
+    u.chances.shareGrants = 0;
+    u.chances.lastDate = today;
+  }
+  if (u.ranking.lastScoreDate !== today) {
+    u.ranking.todayScore = 0;
+    u.ranking.lastScoreDate = today;
+  }
   return u;
 }
 function saveUser() {
@@ -290,6 +318,115 @@ function hitTarget(x, y, t) {
 }
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+function dateKey(date = new Date()) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+function addDays(date, days) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function hashString(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash;
+}
+function seasonForDate(date = new Date()) {
+  const month = date.getMonth() + 1;
+  if (month >= 3 && month <= 5) return SEASONS[0];
+  if (month >= 6 && month <= 8) return SEASONS[1];
+  if (month >= 9 && month <= 11) return SEASONS[2];
+  return SEASONS[3];
+}
+function weatherForDateKey(key, seasonId) {
+  const roll = hashString(`${key}:${seasonId}`) % 100;
+  if (seasonId === 'winter' && roll < 24) return WEATHERS.find((w) => w.id === 'snow');
+  if (seasonId === 'summer' && roll < 18) return WEATHERS.find((w) => w.id === 'storm');
+  if (roll < 30) return WEATHERS.find((w) => w.id === 'sunny');
+  if (roll < 50) return WEATHERS.find((w) => w.id === 'cloudy');
+  if (roll < 70) return WEATHERS.find((w) => w.id === 'rain');
+  if (roll < 84) return WEATHERS.find((w) => w.id === 'fog');
+  if (roll < 94) return WEATHERS.find((w) => w.id === 'storm');
+  return WEATHERS.find((w) => w.id === 'snow');
+}
+function generateForecast(days = 7) {
+  const now = new Date();
+  const forecast = [];
+  for (let i = 0; i < days; i += 1) {
+    const d = addDays(now, i);
+    const season = seasonForDate(d);
+    const key = dateKey(d);
+    forecast.push({ key, season: season.id, weather: weatherForDateKey(key, season.id).id });
+  }
+  return forecast;
+}
+function ensureCalendar(calendar) {
+  const today = dateKey();
+  if (!calendar || calendar.dayKey !== today || !Array.isArray(calendar.forecast) || calendar.forecast.length < 3) {
+    const season = seasonForDate();
+    return { dayKey: today, season: season.id, forecast: generateForecast(7) };
+  }
+  return calendar;
+}
+function todayWeather() {
+  const today = user.calendar.forecast.find((item) => item.key === user.calendar.dayKey) || user.calendar.forecast[0];
+  return WEATHERS.find((w) => w.id === today.weather) || WEATHERS[0];
+}
+function todaySeason() {
+  const today = user.calendar.forecast.find((item) => item.key === user.calendar.dayKey) || user.calendar.forecast[0];
+  return SEASONS.find((s) => s.id === today.season) || seasonForDate();
+}
+function environmentEffects() {
+  const weather = todayWeather();
+  const season = todaySeason();
+  const seasonBoost = season.id === 'spring' ? .01 : season.id === 'summer' ? .015 : season.id === 'winter' ? .005 : 0;
+  const valueBonus = season.id === 'autumn' ? .12 : 0;
+  const waitSeason = season.id === 'winter' ? 1.08 : season.id === 'spring' ? .96 : 1;
+  return {
+    weather,
+    season,
+    wait: weather.wait * waitSeason,
+    rarityBoost: weather.rarityBoost + seasonBoost,
+    hitSpeed: weather.hitSpeed,
+    zone: weather.zone,
+    valueBonus,
+  };
+}
+function grantChance(reason) {
+  user.chances.left = Math.min(user.chances.max, user.chances.left + 1);
+  status = reason || '获得 1 次钓鱼机会';
+  saveUser();
+}
+function failCatch(reason) {
+  state.phase = 'idle';
+  hb.active = false;
+  hb.catch = null;
+  const textMap = {
+    slow: '反应慢了一点，鱼跑了',
+    miss: '差一点命中，鱼脱钩了',
+    timeout: '收线超时，鱼跑了',
+    noChance: '今天的钓鱼次数用完了',
+  };
+  status = textMap[reason] || '这次没钓上来';
+  user.lastFailure = { reason, at: Date.now(), province: user.province };
+  modal = { type: 'failure', reason };
+  saveUser();
+}
+function catchScore(c) {
+  const rarityScore = { trash: 10, common: 60, rare: 180, legendary: 520, hidden: 1200, treasure: 260, limited: 420, rod_exclusive: 500 };
+  const base = rarityScore[c.rarity] || 60;
+  const weightScore = c.weight ? Math.round(c.weight * 18) : 0;
+  const env = environmentEffects();
+  const envBonus = Math.round(base * (env.rarityBoost + env.valueBonus));
+  return base + weightScore + envBonus;
+}
+function provinceRankRows() {
+  const own = { name: user.username, score: user.ranking.bestScore || 0, self: true };
+  return [own].concat(MOCK_PROVINCE_RANKS).sort((a, b) => b.score - a.score);
 }
 function activeRod() {
   const dexCount = Object.keys(user.dex).length;
@@ -311,8 +448,8 @@ function accessoryEffects() {
   return { rarityBoost: Math.min(0.10, 0.003 * acc.star), slow: Math.min(0.24, 0.006 * acc.star) };
 }
 function weightedRarity() {
-  const boost = accessoryEffects().rarityBoost;
-  const table = [['common', .70 - boost], ['rare', .255 + boost * .70], ['legendary', .04 + boost * .23], ['hidden', .005 + boost * .07]];
+  const boost = accessoryEffects().rarityBoost + environmentEffects().rarityBoost;
+  const table = [['common', Math.max(.54, .70 - boost)], ['rare', .255 + boost * .70], ['legendary', .04 + boost * .23], ['hidden', .005 + boost * .07]];
   let r = Math.random();
   for (const item of table) {
     r -= item[1];
@@ -343,12 +480,18 @@ function cast() {
     status = '没有鱼饵了，去商店买点吧';
     return;
   }
+  if ((user.chances.left || 0) <= 0) {
+    failCatch('noChance');
+    return;
+  }
   user.baits[user.currentBait] -= 1;
+  user.chances.left -= 1;
+  const env = environmentEffects();
   state.phase = 'waiting';
-  state.wait = 1.5 + Math.random() * 3.5;
+  state.wait = (1.1 + Math.random() * 2.2) * env.wait;
   state.hookX = W * 0.5 + (Math.random() - .5) * 80;
   state.hookY = sceneTop() + sceneHeight() * .52 + Math.random() * 30;
-  status = '已抛竿，等待鱼上钩...';
+  status = `${env.season.name}${env.weather.name}，已抛竿等待上钩...`;
   saveUser();
 }
 function startHitbar() {
@@ -359,9 +502,10 @@ function startHitbar() {
   hb.need = HITS_BY_RARITY[hb.catch.rarity] || 2;
   hb.cursor = 0;
   hb.dir = 1;
-  hb.width = Math.max(.1, .28 - hb.need * .025);
+  const env = environmentEffects();
+  hb.width = Math.max(.09, (.28 - hb.need * .025) * env.zone);
   hb.zone = Math.random() * (1 - hb.width);
-  hb.speed = (.75 + hb.need * .17) * (1 - accessoryEffects().slow);
+  hb.speed = (.75 + hb.need * .17) * (1 - accessoryEffects().slow) * env.hitSpeed;
   hb.time = 12;
   hb.active = true;
   status = `${RARITY_NAME[hb.catch.rarity]}级目标上钩了`;
@@ -369,9 +513,7 @@ function startHitbar() {
 function hitbarClick() {
   if (!hb.active || state.phase !== 'reeling') return;
   if (hb.cursor < hb.zone || hb.cursor > hb.zone + hb.width) {
-    hb.hits = 0;
-    hb.zone = Math.random() * (1 - hb.width);
-    status = '没中！计数清零';
+    failCatch('miss');
     return;
   }
   hb.hits += 1;
@@ -394,17 +536,26 @@ function petBonus() {
 }
 function applyCatch(c) {
   const bonus = petBonus();
-  user.money += c.value + bonus.coins;
+  const env = environmentEffects();
+  const envCoinBonus = Math.round(c.value * env.valueBonus);
+  user.money += c.value + envCoinBonus + bonus.coins;
   user.diamonds += c.diamondValue + bonus.diamonds;
   user.dex[c.item.id] = user.dex[c.item.id] || { count: 0, maxWeight: 0 };
   user.dex[c.item.id].count += 1;
   user.dex[c.item.id].maxWeight = Math.max(user.dex[c.item.id].maxWeight || 0, c.weight);
   user.stats.totalCatches += 1;
-  user.stats.totalEarned += c.value;
+  user.stats.totalEarned += c.value + envCoinBonus;
   user.stats.totalDiamonds += c.diamondValue + bonus.diamonds;
-  user.history.unshift({ name: c.item.name, rarity: c.rarity, weight: c.weight, value: c.value, at: Date.now() });
+  const score = catchScore(c);
+  user.ranking.todayScore += score;
+  if (score > (user.ranking.bestScore || 0)) {
+    user.ranking.bestScore = score;
+    user.ranking.bestFish = c.item.name;
+    user.ranking.bestWeight = c.weight || 0;
+  }
+  user.history.unshift({ name: c.item.name, rarity: c.rarity, weight: c.weight, value: c.value, score, at: Date.now() });
   if (user.history.length > 30) user.history.length = 30;
-  status = `钓到 ${c.item.name}`;
+  status = `钓到 ${c.item.name}，本局 ${score} 分`;
 }
 function buyBait(id, count) {
   const bait = BAITS[id];
@@ -654,29 +805,40 @@ function drawOriginalButton(id, icon, label, x, y, w, h, active, data, variant) 
 function drawTopbar() {
   drawRect(CONTENT_X, TOPBAR_Y, CONTENT_W, TOPBAR_H, '#1a1a2e', '#ffd700');
   const userY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H / 2;
+  const env = environmentEffects();
   drawText(user.username, CONTENT_X + TOPBAR_PAD_X, userY, 14, '#4ec9b0');
   drawText(`💰 ${user.money}`, CONTENT_X + Math.min(112, CONTENT_W * .28), userY, 14, '#ffd700');
-  drawText(`💎 ${user.diamonds}`, CONTENT_X + Math.min(205, CONTENT_W * .52), userY, 14, '#66e6ff');
-  drawText('v1.0.23', CONTENT_X + CONTENT_W - TOPBAR_PAD_X, userY, 9, '#666666', 'right');
+  drawText(`次数 ${user.chances.left}/${user.chances.max}`, CONTENT_X + Math.min(205, CONTENT_W * .52), userY, 14, '#66e6ff');
+  drawFittedText(`${env.season.icon}${env.weather.icon} ${env.weather.name}`, CONTENT_X + CONTENT_W - TOPBAR_PAD_X, userY, 12, '#d8c98a', 'right', CONTENT_W * .32);
   const actionY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H + 6;
   const bw = Math.floor((CONTENT_W - TOPBAR_PAD_X * 2 - ACTION_GAP * (ACTION_COLS - 1)) / ACTION_COLS);
   TOP_BUTTONS.forEach((btn, i) => {
     const row = Math.floor(i / ACTION_COLS);
     const col = i % ACTION_COLS;
-    const label = btn[0] === 'vip' ? (user.vipAuto ? 'VIP自动:开' : 'VIP自动') : btn[1];
+    const label = btn[1];
     const active = modal && modal.type === btn[0];
     const x = CONTENT_X + TOPBAR_PAD_X + col * (bw + ACTION_GAP);
     const y = actionY + row * (ACTION_H + ACTION_GAP);
-    const isVip = btn[0] === 'vip';
-    drawOriginalButton('top:' + btn[0], TOP_EMOJI[btn[0]], label, x, y, bw, ACTION_H, active, null, isVip ? 'vip' : '');
+    drawOriginalButton('top:' + btn[0], TOP_EMOJI[btn[0]], label, x, y, bw, ACTION_H, active, null, '');
   });
 }
 function drawScene() {
   const top = sceneTop();
   const h = sceneHeight();
-  drawRect(CONTENT_X, top, CONTENT_W, h, '#87ceeb', '#ffd700');
+  const env = environmentEffects();
+  const skyColor = env.weather.id === 'storm' ? '#52616f'
+    : env.weather.id === 'rain' ? '#6f91a8'
+      : env.weather.id === 'fog' ? '#aab7bf'
+        : env.weather.id === 'snow' ? '#cfe7f5'
+          : env.season.id === 'autumn' ? '#9fd1d9'
+            : '#87ceeb';
+  const waterColor = env.weather.id === 'storm' ? '#123a55'
+    : env.weather.id === 'snow' ? '#2b7c9f'
+      : env.season.id === 'winter' ? '#237da2'
+        : '#1e6091';
+  drawRect(CONTENT_X, top, CONTENT_W, h, skyColor, '#ffd700');
   const waterY = top + h * .40;
-  drawRect(CONTENT_X, waterY, CONTENT_W, h - (waterY - top), '#1e6091');
+  drawRect(CONTENT_X, waterY, CONTENT_W, h - (waterY - top), waterColor);
   ctx.fillStyle = '#26384c';
   ctx.beginPath();
   ctx.moveTo(CONTENT_X, waterY);
@@ -695,6 +857,30 @@ function drawScene() {
     const sy = waterY + 20 + ((i * 41) % Math.max(40, h - (waterY - top) - 40));
     ctx.fillStyle = 'rgba(230,250,255,.65)';
     ctx.fillRect(sx, sy, i % 3 === 0 ? 4 : 2, 1);
+  }
+  if (env.weather.id === 'rain' || env.weather.id === 'storm') {
+    ctx.strokeStyle = env.weather.id === 'storm' ? 'rgba(210,235,255,.75)' : 'rgba(225,245,255,.55)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 34; i += 1) {
+      const rx = CONTENT_X + ((i * 43 + Date.now() / 18) % CONTENT_W);
+      const ry = top + 8 + ((i * 67 + Date.now() / 12) % h);
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx - 8, ry + 18);
+      ctx.stroke();
+    }
+    if (env.weather.id === 'storm' && Math.floor(Date.now() / 700) % 5 === 0) drawRect(CONTENT_X + CONTENT_W * .64, top + 22, 4, 70, 'rgba(255,255,210,.88)');
+  } else if (env.weather.id === 'snow') {
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    for (let i = 0; i < 26; i += 1) {
+      const sx = CONTENT_X + ((i * 59 + Date.now() / 45) % CONTENT_W);
+      const sy = top + 10 + ((i * 47 + Date.now() / 32) % h);
+      ctx.fillRect(sx, sy, 3, 3);
+    }
+  } else if (env.weather.id === 'fog') {
+    ctx.fillStyle = 'rgba(230,236,238,.28)';
+    drawRect(CONTENT_X + 8, top + h * .28, CONTENT_W - 16, 22, 'rgba(230,236,238,.28)');
+    drawRect(CONTENT_X + 20, top + h * .58, CONTENT_W - 40, 18, 'rgba(230,236,238,.22)');
   }
   drawRect(CONTENT_X + CONTENT_W - 62, top + 28, 26, 26, '#ffeb3b');
   const rod = activeRod();
@@ -748,7 +934,10 @@ function drawGamebar() {
   const rod = activeRod();
   const upcoming = nextRod();
   const dexCount = Object.keys(user.dex).length;
-  const rodLine = upcoming ? `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}  下一把: ${upcoming.name} (${dexCount}/${upcoming.threshold})` : `🎣 ${rod.name}  🧍 ${CHARACTERS.find((c) => c.id === user.activeCharacter)?.name || '钓鱼高手'}`;
+  const env = environmentEffects();
+  const rodLine = upcoming
+    ? `鱼竿 ${rod.name} · 下一把 ${upcoming.name} (${dexCount}/${upcoming.threshold}) · ${user.province}榜最佳 ${user.ranking.bestScore || 0}`
+    : `鱼竿 ${rod.name} · ${env.weather.name}${env.weather.desc} · ${user.province}榜最佳 ${user.ranking.bestScore || 0}`;
   drawFittedText(rodLine, W / 2, y + 67, 12, '#d8c98a', 'center', CONTENT_W - 42);
   drawFittedText(status, W / 2, y + 91, 13, '#4ec9b0', 'center', CONTENT_W - 36);
 }
@@ -811,6 +1000,10 @@ function drawModal() {
     drawResultModal();
     return;
   }
+  if (modal.type === 'failure') {
+    drawFailureModal();
+    return;
+  }
   const modalTop = Math.max(76, MINI_SAFE_TOP + 24);
   drawRect(18, modalTop, W - 36, H - modalTop - 36, '#191a2f', '#ffd700');
   drawButton('modal:close', '×', W - 58, modalTop + 12, 30, 30, false);
@@ -825,6 +1018,7 @@ function drawModal() {
     gacha: '幸运抽奖',
     redeem: '兑换码',
     share: '分享',
+    weather: '今日天气',
     result: '钓获结果',
   };
   drawText(titleMap[modal.type] || '', W / 2, modalTop + 29, 20, '#ffd700', 'center');
@@ -835,6 +1029,7 @@ function drawModal() {
   else if (modal.type === 'pet') drawPetModal();
   else if (modal.type === 'accessory') drawAccessoryModal();
   else if (modal.type === 'rank') drawRankModal();
+  else if (modal.type === 'weather') drawWeatherModal();
   else if (modal.type === 'gacha') drawGachaModal();
   else if (modal.type === 'redeem') drawRedeemModal();
   else if (modal.type === 'share') drawShareModal();
@@ -930,15 +1125,16 @@ function drawDexModal() {
   drawFittedText(`累计钓获 ${user.stats.totalCatches || 0} 次 · 收入 ${user.stats.totalEarned || 0} 金币 · 钻石 ${user.stats.totalDiamonds || 0}`, 46, statsY + 34, 11, '#9aa6b2', 'left', W - 92);
 }
 function drawRodModal() {
-  const list = RODS.concat(GACHA_RODS);
+  const list = RODS.concat(GACHA_RODS.filter((rod) => user.ownedRods.includes(rod.id)));
   const dexCount = Object.keys(user.dex).length;
   list.forEach((rod, i) => {
     const y = 136 + i * 50;
     const gacha = GACHA_RODS.some((r) => r.id === rod.id);
     const unlocked = gacha ? user.ownedRods.includes(rod.id) : dexCount >= rod.threshold;
-    drawListItem(34, y, W - 68, 42, rod.icon || '竿', rod.name, unlocked ? (activeRod().id === rod.id ? '装备中' : '点击装备') : (gacha ? '抽奖限定' : `${dexCount}/${rod.threshold}`), rod.hi, 'rod_' + rod.id, unlocked && activeRod().id !== rod.id ? 62 : 0);
+    drawListItem(34, y, W - 68, 42, rod.icon || '竿', rod.name, unlocked ? (activeRod().id === rod.id ? '装备中' : '点击装备') : `图鉴 ${dexCount}/${rod.threshold}`, rod.hi, 'rod_' + rod.id, unlocked && activeRod().id !== rod.id ? 62 : 0);
     if (unlocked && activeRod().id !== rod.id) drawButton('equiprod', '装备', W - 92, y + 6, 48, 30, false, { id: rod.id });
   });
+  drawFittedText('轻度版鱼竿按图鉴自然解锁，抽奖限定竿只保留已拥有外观。', W / 2, H - 64, 12, '#9aa6b2', 'center', W - 86);
 }
 function drawCharacterModal() {
   CHARACTERS.forEach((ch, i) => {
@@ -978,15 +1174,35 @@ function drawAccessoryModal() {
   });
 }
 function drawRankModal() {
-  const rows = [
-    { name: user.username, n: user.stats.totalCatches || 0, w: Object.values(user.dex).reduce((s, x) => s + (x.maxWeight || 0), 0) },
-    { name: 'wakaka', n: 420, w: 6890.2 },
-    { name: 'pixel', n: 180, w: 2240.6 },
-    { name: 'cocos38', n: 126, w: 1610.4 },
-  ].sort((a, b) => b.n - a.n);
+  drawRect(34, 126, W - 68, 82, '#0d1421', '#33344f');
+  drawText(`${user.province}省份榜`, 48, 148, 15, '#ffd700');
+  drawFittedText(`个人最佳 ${user.ranking.bestScore || 0} 分 · 今日累计 ${user.ranking.todayScore || 0} 分`, 48, 174, 12, '#9aa6b2', 'left', W - 96);
+  drawButton('provinceNext', '切换省份', W - 128, 142, 74, 30, false);
+  const rows = provinceRankRows();
   rows.forEach((r, i) => {
-    drawListItem(34, 140 + i * 54, W - 68, 44, String(i + 1), r.name, `累计 ${r.n} 次 · ${r.w.toFixed(1)}kg`, i === 0 ? '#ffd700' : '#ffffff', i === 0 ? 'ui_rank' : '');
+    const label = r.self ? `${r.name}（我）` : r.name;
+    const desc = r.self
+      ? `最佳鱼 ${user.ranking.bestFish || '暂无'} · 最大 ${user.ranking.bestWeight || 0}kg`
+      : `本周最佳 ${r.score} 分`;
+    drawListItem(34, 224 + i * 54, W - 68, 44, String(i + 1), label, desc, r.self ? '#ffd700' : '#ffffff', r.self ? 'ui_rank' : '');
   });
+  const ownRank = rows.findIndex((r) => r.self) + 1;
+  drawFittedText(`你当前排第 ${ownRank} 名，失败页和结果页会引导继续冲榜。`, W / 2, H - 70, 12, '#4ec9b0', 'center', W - 90);
+}
+function drawWeatherModal() {
+  const env = environmentEffects();
+  drawRect(34, 126, W - 68, 86, '#0d1421', '#33344f');
+  drawText(`${env.season.icon} ${env.season.name} · ${env.weather.icon} ${env.weather.name}`, 48, 150, 17, '#ffd700');
+  drawFittedText(`${env.weather.desc} · ${env.weather.tip}`, 48, 177, 12, '#9aa6b2', 'left', W - 96);
+  drawFittedText(`效果：咬钩 ${(env.wait * 100).toFixed(0)}% · 稀有 +${Math.round(env.rarityBoost * 100)}% · 命中速度 ${(env.hitSpeed * 100).toFixed(0)}%`, 48, 198, 11, '#66e6ff', 'left', W - 96);
+  drawText('未来预报', 48, 242, 15, '#ffd700');
+  user.calendar.forecast.slice(0, 7).forEach((item, i) => {
+    const weather = WEATHERS.find((w) => w.id === item.weather) || WEATHERS[0];
+    const season = SEASONS.find((s) => s.id === item.season) || SEASONS[0];
+    const day = i === 0 ? '今天' : `+${i}天`;
+    drawListItem(34, 264 + i * 48, W - 68, 38, weather.icon, `${day} ${season.name} ${weather.name}`, weather.tip, season.color, '');
+  });
+  drawFittedText('建议：根据预报提前买鱼饵，雨天和雷暴更适合冲稀有鱼与省份榜。', W / 2, H - 62, 12, '#4ec9b0', 'center', W - 90);
 }
 function drawGachaModal() {
   drawButton('gachatab', '金币抽奖', 40, 132, 92, 32, gachaTab === 'coins', { tab: 'coins' });
@@ -1019,20 +1235,48 @@ function drawShareModal() {
   drawButton('sharecopy', '复制分享口令并领奖励', 54, 205, W - 108, 40, true);
   drawText('每天首次分享奖励 10 金币', W / 2, 270, 14, '#ffd700', 'center');
 }
+function drawFailureModal() {
+  const reasonText = {
+    slow: '鱼已经咬钩了，但反应慢了一点',
+    miss: '只差一点命中红区，鱼脱钩了',
+    timeout: '收线时间用完，鱼跑了',
+    noChance: '今天的钓鱼次数用完了',
+  }[modal.reason] || '这次没有钓上来';
+  const cardW = Math.min(W - 56, 330);
+  const cardH = 260;
+  const x = (W - cardW) / 2;
+  const y = Math.max(MINI_SAFE_TOP + 78, H * .22);
+  drawRect(0, 0, W, H, 'rgba(0,0,0,.50)');
+  drawRect(x, y, cardW, cardH, '#1a1a2e', '#ff8c42');
+  drawButton('modal:close', '×', x + cardW - 42, y + 10, 30, 30, false);
+  drawText('差一点就钓到了', W / 2, y + 38, 20, '#ffcc66', 'center');
+  drawFittedText(reasonText, W / 2, y + 72, 13, '#ffffff', 'center', cardW - 44);
+  drawFittedText(`${user.province}榜最佳 ${user.ranking.bestScore || 0} 分，再来一局冲排名`, W / 2, y + 102, 12, '#66e6ff', 'center', cardW - 44);
+  drawRect(x + 24, y + 124, cardW - 48, 42, '#10121f', '#33344f');
+  drawText(`剩余次数 ${user.chances.left}/${user.chances.max}`, W / 2, y + 145, 15, '#4ec9b0', 'center');
+  drawButton('shareChance', '分享+1次', x + 30, y + 184, 118, 36, true);
+  drawButton('coinChance', '50金币+1次', x + cardW - 148, y + 184, 118, 36, false);
+  drawButton('openrank', '看省份榜', x + 30, y + 228, 118, 30, false);
+  drawButton('modal:close', '明天再来', x + cardW - 148, y + 228, 118, 30, false);
+}
 function drawResultModal() {
   const c = modal.catch;
   const cardW = Math.min(W - 72, 300);
-  const cardH = 188;
+  const cardH = 238;
   const x = (W - cardW) / 2;
   const y = Math.max(MINI_SAFE_TOP + 96, H * .28);
+  const score = c ? catchScore(c) : 0;
   drawRect(0, 0, W, H, 'rgba(0,0,0,.45)');
   drawRect(x, y, cardW, cardH, '#1a1a2e', '#ffd700');
   drawButton('modal:close', '×', x + cardW - 42, y + 10, 30, 30, false);
   drawFishPixelIcon(W / 2, y + 54, c.item, true);
   drawText(c.item.name, W / 2, y + 92, 20, RARITY_COLOR[c.rarity], 'center');
   drawText(`${RARITY_NAME[c.rarity]} ${c.weight ? c.weight + 'kg' : ''}`, W / 2, y + 122, 14, '#ffffff', 'center');
-  drawText(`获得 ${c.value ? c.value + '金币' : ''}${c.diamondValue ? c.diamondValue + '钻石' : ''}`, W / 2, y + 148, 14, '#ffd700', 'center');
-  drawButton('modal:close', '关闭', W / 2 - 48, y + cardH - 42, 96, 30, true);
+  drawText(`获得 ${c.value ? c.value + '金币' : ''}${c.diamondValue ? c.diamondValue + '钻石' : ''} · ${score}分`, W / 2, y + 148, 14, '#ffd700', 'center');
+  drawFittedText(`${user.province}榜最佳 ${user.ranking.bestScore || 0} 分`, W / 2, y + 173, 12, '#66e6ff', 'center', cardW - 40);
+  drawButton('resultShare', '分享战绩', x + 24, y + cardH - 46, 86, 30, true);
+  drawButton('openrank', '看排行', x + cardW / 2 - 43, y + cardH - 46, 86, 30, false);
+  drawButton('modal:close', '继续钓', x + cardW - 110, y + cardH - 46, 86, 30, true);
 }
 function render() {
   targets = [];
@@ -1055,11 +1299,10 @@ function update() {
       state.bite = 3;
       status = '鱼上钩了！点击画面响应';
     }
-  } else if (state.phase === 'hooked') {
+    } else if (state.phase === 'hooked') {
     state.bite -= dt;
     if (state.bite <= 0) {
-      state.phase = 'idle';
-      status = '反应太慢，鱼跑了';
+      failCatch('slow');
     }
   } else if (state.phase === 'reeling') {
     hb.cursor += hb.dir * hb.speed * dt;
@@ -1069,9 +1312,7 @@ function update() {
     }
     hb.time -= dt;
     if (hb.time <= 0) {
-      state.phase = 'idle';
-      hb.active = false;
-      status = '时间到，鱼跑了';
+      failCatch('timeout');
     }
   }
   if (user.vipAuto && !modal) {
@@ -1103,11 +1344,7 @@ function handleTap(x, y) {
 function handleAction(t) {
   if (t.id.startsWith('top:')) {
     const type = t.id.slice(4);
-    if (type === 'vip') {
-      user.vipAuto = !user.vipAuto;
-      status = user.vipAuto ? 'VIP自动钓鱼已开启' : 'VIP自动钓鱼已关闭';
-      saveUser();
-    } else if (type === 'logout') {
+    if (type === 'logout') {
       user = freshUser();
       state.phase = 'idle';
       modal = null;
@@ -1133,6 +1370,7 @@ function handleAction(t) {
   }
   else if (t.id === 'hit') hitbarClick();
   else if (t.id === 'modal:close') modal = null;
+  else if (t.id === 'openrank') modal = { type: 'rank' };
   else if (t.id === 'dextab') activeDexBait = t.data.id;
   else if (t.id === 'buybait') buyBait(t.data.id, t.data.count);
   else if (t.id === 'buybaitn') askBuyBaitCount(t.data.id);
@@ -1179,6 +1417,32 @@ function handleAction(t) {
       saveUser();
     }
     status = '分享口令已复制';
+  } else if (t.id === 'shareChance') {
+    wx.setClipboardData({ data: `我在${user.province}榜钓到了 ${user.ranking.bestScore || 0} 分，来挑战我的钓鱼纪录！` });
+    if (user.chances.shareGrants >= 3) {
+      status = '今日分享补次数已达上限，可用金币补次数或明天再来';
+    } else {
+      user.chances.shareGrants += 1;
+      grantChance('分享成功，获得 1 次钓鱼机会');
+      modal = null;
+    }
+  } else if (t.id === 'coinChance') {
+    if (user.money < 50) {
+      status = '金币不足，分享或明天再来';
+    } else {
+      user.money -= 50;
+      grantChance('已消耗 50 金币，获得 1 次钓鱼机会');
+      modal = null;
+    }
+  } else if (t.id === 'resultShare') {
+    const score = modal && modal.catch ? catchScore(modal.catch) : (user.ranking.bestScore || 0);
+    wx.setClipboardData({ data: `我在像素钓鱼拿到 ${score} 分，${user.province}榜等你来挑战！` });
+    status = '战绩口令已复制';
+  } else if (t.id === 'provinceNext') {
+    const idx = Math.max(0, PROVINCES.indexOf(user.province));
+    user.province = PROVINCES[(idx + 1) % PROVINCES.length];
+    status = `已切换到${user.province}省份榜`;
+    saveUser();
   }
 }
 wx.onTouchEnd((event) => {

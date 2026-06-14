@@ -1,0 +1,253 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="2600" viewBox="0 0 1900 2600">
+  <defs>
+    <style>
+      .bg { fill: #f5f8fc; }
+      .title { font: 700 38px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #142033; }
+      .subtitle { font: 500 18px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #586579; }
+      .lane { fill: #ffffff; stroke: #d7e0ee; stroke-width: 2; rx: 20; }
+      .laneTitle { font: 700 24px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #14213d; }
+      .node { fill: #ffffff; stroke: #8ba0ba; stroke-width: 2; rx: 12; }
+      .start { fill: #e8f8ef; stroke: #31a66a; }
+      .core { fill: #eaf6ff; stroke: #2f8fd7; }
+      .system { fill: #f1ecff; stroke: #7b61ff; }
+      .weather { fill: #ecfff8; stroke: #14a36f; }
+      .season { fill: #fff4de; stroke: #d99b1d; }
+      .decision { fill: #fff9e8; stroke: #dfa400; }
+      .danger { fill: #fff0ef; stroke: #e45d55; }
+      .done { fill: #eafcff; stroke: #00a6c8; }
+      .text { font: 500 17px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #1f2b3d; }
+      .small { font: 500 14px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #526071; }
+      .tiny { font: 500 12px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #647086; }
+      .arrow { fill: none; stroke: #596579; stroke-width: 2.2; marker-end: url(#arrow); }
+      .soft { fill: none; stroke: #8693a6; stroke-width: 1.8; marker-end: url(#softArrow); }
+      .dash { fill: none; stroke: #8693a6; stroke-width: 1.8; stroke-dasharray: 7 7; marker-end: url(#softArrow); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#596579"/>
+    </marker>
+    <marker id="softArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M1,1 L8,5 L1,9 Z" fill="#8693a6"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1900" height="2600"/>
+  <text class="title" x="80" y="72">钓鱼游戏完整流程图：原有流程 + 天气预报 + 季节系统</text>
+  <text class="subtitle" x="80" y="108">这版保留第一版的主玩法和外围系统，再把天气、预报、季节接入主循环、UI、数值和存档</text>
+
+  <rect class="node start" x="735" y="145" width="430" height="70"/>
+  <text class="text" x="950" y="174" text-anchor="middle">游戏启动</text>
+  <text class="small" x="950" y="198" text-anchor="middle">loadUser / normalize / 初始化运行时状态</text>
+
+  <rect class="lane" x="70" y="255" width="1760" height="320"/>
+  <text class="laneTitle" x="105" y="302">1. 启动、存档与环境初始化</text>
+  <rect class="node" x="115" y="340" width="245" height="66"/>
+  <text class="text" x="238" y="367" text-anchor="middle">原有玩家数据</text>
+  <text class="small" x="238" y="389" text-anchor="middle">金币/钻石/鱼饵/图鉴/历史</text>
+  <rect class="node" x="405" y="340" width="245" height="66"/>
+  <text class="text" x="528" y="367" text-anchor="middle">原有收藏数据</text>
+  <text class="small" x="528" y="389" text-anchor="middle">鱼竿/角色/宠物/首饰</text>
+  <rect class="node weather" x="695" y="340" width="245" height="66"/>
+  <text class="text" x="818" y="367" text-anchor="middle">新增 calendar</text>
+  <text class="small" x="818" y="389" text-anchor="middle">gameDay / lastTickAt</text>
+  <rect class="node season" x="985" y="340" width="245" height="66"/>
+  <text class="text" x="1108" y="367" text-anchor="middle">季节系统</text>
+  <text class="small" x="1108" y="389" text-anchor="middle">春/夏/秋/冬</text>
+  <rect class="node weather" x="1275" y="340" width="245" height="66"/>
+  <text class="text" x="1398" y="367" text-anchor="middle">天气与预报</text>
+  <text class="small" x="1398" y="389" text-anchor="middle">今日天气 + 未来 3-7 天</text>
+  <rect class="node done" x="760" y="470" width="380" height="62"/>
+  <text class="text" x="950" y="496" text-anchor="middle">resolveEnvironmentEffects</text>
+  <text class="small" x="950" y="518" text-anchor="middle">合并季节、天气、首饰、宠物、活动效果</text>
+  <path class="arrow" d="M950 215 L950 255"/>
+  <path class="soft" d="M238 406 C330 455 620 460 760 492"/>
+  <path class="soft" d="M528 406 C600 450 700 465 790 480"/>
+  <path class="soft" d="M818 406 L870 470"/>
+  <path class="soft" d="M1108 406 L1020 470"/>
+  <path class="soft" d="M1398 406 C1280 455 1165 467 1085 480"/>
+
+  <rect class="lane" x="70" y="625" width="1760" height="500"/>
+  <text class="laneTitle" x="105" y="672">2. 主玩法状态机（原流程保留，插入天气/季节影响）</text>
+  <rect class="node start" x="115" y="715" width="175" height="60"/>
+  <text class="text" x="203" y="751" text-anchor="middle">idle 待机</text>
+  <rect class="node core" x="345" y="715" width="190" height="60"/>
+  <text class="text" x="440" y="740" text-anchor="middle">检查鱼饵</text>
+  <text class="small" x="440" y="761" text-anchor="middle">不足引导商店</text>
+  <rect class="node weather" x="590" y="715" width="220" height="60"/>
+  <text class="text" x="700" y="740" text-anchor="middle">读取 env</text>
+  <text class="small" x="700" y="761" text-anchor="middle">天气/季节/首饰/宠物</text>
+  <rect class="node core" x="865" y="715" width="190" height="60"/>
+  <text class="text" x="960" y="740" text-anchor="middle">cast</text>
+  <text class="small" x="960" y="761" text-anchor="middle">扣鱼饵、算等待</text>
+  <rect class="node core" x="1110" y="715" width="190" height="60"/>
+  <text class="text" x="1205" y="751" text-anchor="middle">waiting</text>
+  <rect class="node core" x="1355" y="715" width="190" height="60"/>
+  <text class="text" x="1450" y="751" text-anchor="middle">hooked</text>
+  <rect class="node danger" x="1595" y="715" width="175" height="60"/>
+  <text class="text" x="1683" y="740" text-anchor="middle">超时逃脱</text>
+  <text class="small" x="1683" y="761" text-anchor="middle">回到 idle</text>
+
+  <rect class="node core" x="200" y="850" width="210" height="62"/>
+  <text class="text" x="305" y="876" text-anchor="middle">startHitbar</text>
+  <text class="small" x="305" y="898" text-anchor="middle">天气修正速度/宽度</text>
+  <rect class="node core" x="480" y="850" width="210" height="62"/>
+  <text class="text" x="585" y="876" text-anchor="middle">rollCatch</text>
+  <text class="small" x="585" y="898" text-anchor="middle">鱼池 + 稀有度计算</text>
+  <rect class="node weather" x="760" y="850" width="250" height="62"/>
+  <text class="text" x="885" y="876" text-anchor="middle">应用限定规则</text>
+  <text class="small" x="885" y="898" text-anchor="middle">seasonTags / weatherTags</text>
+  <rect class="node core" x="1080" y="850" width="210" height="62"/>
+  <text class="text" x="1185" y="876" text-anchor="middle">reeling</text>
+  <text class="small" x="1185" y="898" text-anchor="middle">连续命中红区</text>
+  <polygon class="decision" points="1450,836 1595,881 1450,926 1305,881"/>
+  <text class="text" x="1450" y="877" text-anchor="middle">命中达标?</text>
+  <rect class="node done" x="1055" y="1000" width="250" height="62"/>
+  <text class="text" x="1180" y="1026" text-anchor="middle">applyCatch</text>
+  <text class="small" x="1180" y="1048" text-anchor="middle">奖励 + 天气/季节加成</text>
+  <rect class="node done" x="735" y="1000" width="250" height="62"/>
+  <text class="text" x="860" y="1026" text-anchor="middle">更新图鉴/历史/统计</text>
+  <text class="small" x="860" y="1048" text-anchor="middle">记录最大重量和收益</text>
+  <rect class="node done" x="415" y="1000" width="250" height="62"/>
+  <text class="text" x="540" y="1026" text-anchor="middle">结果弹窗</text>
+  <text class="small" x="540" y="1048" text-anchor="middle">展示稀有度与环境加成</text>
+  <rect class="node" x="160" y="1000" width="190" height="62"/>
+  <text class="text" x="255" y="1026" text-anchor="middle">saveUser</text>
+  <text class="small" x="255" y="1048" text-anchor="middle">回到 idle</text>
+
+  <path class="arrow" d="M290 745 L345 745"/>
+  <path class="arrow" d="M535 745 L590 745"/>
+  <path class="arrow" d="M810 745 L865 745"/>
+  <path class="arrow" d="M1055 745 L1110 745"/>
+  <path class="arrow" d="M1300 745 L1355 745"/>
+  <path class="soft" d="M1545 745 L1595 745"/>
+  <path class="arrow" d="M1450 775 C1360 825 520 820 360 850"/>
+  <path class="arrow" d="M410 881 L480 881"/>
+  <path class="arrow" d="M690 881 L760 881"/>
+  <path class="arrow" d="M1010 881 L1080 881"/>
+  <path class="arrow" d="M1290 881 L1305 881"/>
+  <path class="soft" d="M1450 926 C1450 970 1280 985 1215 1000"/>
+  <path class="soft" d="M1305 881 C1280 945 1265 975 1235 1000"/>
+  <path class="arrow" d="M1055 1031 L985 1031"/>
+  <path class="arrow" d="M735 1031 L665 1031"/>
+  <path class="arrow" d="M415 1031 L350 1031"/>
+  <path class="dash" d="M255 1000 C180 930 160 830 203 775"/>
+
+  <rect class="lane" x="70" y="1175" width="1760" height="560"/>
+  <text class="laneTitle" x="105" y="1222">3. 原有外围系统全部保留</text>
+  <rect class="node system" x="115" y="1260" width="210" height="64"/>
+  <text class="text" x="220" y="1286" text-anchor="middle">商店 shop</text>
+  <text class="small" x="220" y="1308" text-anchor="middle">买1/买N、扣金币/钻石</text>
+  <rect class="node system" x="365" y="1260" width="210" height="64"/>
+  <text class="text" x="470" y="1286" text-anchor="middle">图鉴 dex</text>
+  <text class="small" x="470" y="1308" text-anchor="middle">鱼饵分类、数量、最大重量</text>
+  <rect class="node system" x="615" y="1260" width="210" height="64"/>
+  <text class="text" x="720" y="1286" text-anchor="middle">鱼竿 rod</text>
+  <text class="small" x="720" y="1308" text-anchor="middle">图鉴解锁 + 抽奖限定</text>
+  <rect class="node system" x="865" y="1260" width="210" height="64"/>
+  <text class="text" x="970" y="1286" text-anchor="middle">角色 character</text>
+  <text class="small" x="970" y="1308" text-anchor="middle">拥有/碎片/装备</text>
+  <rect class="node system" x="1115" y="1260" width="210" height="64"/>
+  <text class="text" x="1220" y="1286" text-anchor="middle">首饰 accessory</text>
+  <text class="small" x="1220" y="1308" text-anchor="middle">稀有度/命中条加成</text>
+  <rect class="node system" x="1365" y="1260" width="210" height="64"/>
+  <text class="text" x="1470" y="1286" text-anchor="middle">宠物 pet</text>
+  <text class="small" x="1470" y="1308" text-anchor="middle">金币/钻石奖励加成</text>
+  <rect class="node system" x="1615" y="1260" width="170" height="64"/>
+  <text class="text" x="1700" y="1286" text-anchor="middle">排行 rank</text>
+  <text class="small" x="1700" y="1308" text-anchor="middle">累计与重量</text>
+
+  <rect class="node system" x="115" y="1385" width="210" height="64"/>
+  <text class="text" x="220" y="1411" text-anchor="middle">抽奖 gacha</text>
+  <text class="small" x="220" y="1433" text-anchor="middle">金币/钻石、期数、十连</text>
+  <rect class="node system" x="365" y="1385" width="210" height="64"/>
+  <text class="text" x="470" y="1411" text-anchor="middle">VIP 自动</text>
+  <text class="small" x="470" y="1433" text-anchor="middle">自动抛竿/收线/命中</text>
+  <rect class="node system" x="615" y="1385" width="210" height="64"/>
+  <text class="text" x="720" y="1411" text-anchor="middle">兑换 redeem</text>
+  <text class="small" x="720" y="1433" text-anchor="middle">usedKey 防重复</text>
+  <rect class="node system" x="865" y="1385" width="210" height="64"/>
+  <text class="text" x="970" y="1411" text-anchor="middle">分享 share</text>
+  <text class="small" x="970" y="1433" text-anchor="middle">复制口令、每日奖励</text>
+  <rect class="node system" x="1115" y="1385" width="210" height="64"/>
+  <text class="text" x="1220" y="1411" text-anchor="middle">退出 logout</text>
+  <text class="small" x="1220" y="1433" text-anchor="middle">freshUser 重置</text>
+  <rect class="node weather" x="1365" y="1385" width="210" height="64"/>
+  <text class="text" x="1470" y="1411" text-anchor="middle">天气预报 forecast</text>
+  <text class="small" x="1470" y="1433" text-anchor="middle">今日 + 未来 3-7 天</text>
+  <rect class="node done" x="1615" y="1385" width="170" height="64"/>
+  <text class="text" x="1700" y="1411" text-anchor="middle">保存</text>
+  <text class="small" x="1700" y="1433" text-anchor="middle">saveUser</text>
+
+  <rect class="node weather" x="300" y="1530" width="360" height="66"/>
+  <text class="text" x="480" y="1557" text-anchor="middle">图鉴新增限定标签</text>
+  <text class="small" x="480" y="1579" text-anchor="middle">季节限定 / 天气限定 / 推荐天气</text>
+  <rect class="node weather" x="770" y="1530" width="360" height="66"/>
+  <text class="text" x="950" y="1557" text-anchor="middle">预报新增策略提示</text>
+  <text class="small" x="950" y="1579" text-anchor="middle">推荐鱼饵、目标鱼、风险收益</text>
+  <rect class="node done" x="1240" y="1530" width="360" height="66"/>
+  <text class="text" x="1420" y="1557" text-anchor="middle">外围系统回归检查</text>
+  <text class="small" x="1420" y="1579" text-anchor="middle">功能入口不丢、数据不冲突</text>
+  <path class="soft" d="M470 1324 L480 1530"/>
+  <path class="soft" d="M1470 1449 L950 1530"/>
+  <path class="soft" d="M1220 1324 C1280 1450 1360 1490 1420 1530"/>
+
+  <rect class="lane" x="70" y="1785" width="1760" height="420"/>
+  <text class="laneTitle" x="105" y="1832">4. 天气、预报、季节新增系统</text>
+  <rect class="node season" x="115" y="1875" width="260" height="70"/>
+  <text class="text" x="245" y="1903" text-anchor="middle">季节系统</text>
+  <text class="small" x="245" y="1926" text-anchor="middle">春夏秋冬、季节鱼、场景色调</text>
+  <rect class="node weather" x="430" y="1875" width="260" height="70"/>
+  <text class="text" x="560" y="1903" text-anchor="middle">天气系统</text>
+  <text class="small" x="560" y="1926" text-anchor="middle">晴/阴/雨/暴雨/雾/雷暴/雪</text>
+  <rect class="node weather" x="745" y="1875" width="260" height="70"/>
+  <text class="text" x="875" y="1903" text-anchor="middle">天气预报</text>
+  <text class="small" x="875" y="1926" text-anchor="middle">稳定随机、跨日 shift、补齐预报</text>
+  <rect class="node done" x="1060" y="1875" width="300" height="70"/>
+  <text class="text" x="1210" y="1903" text-anchor="middle">环境效果 env</text>
+  <text class="small" x="1210" y="1926" text-anchor="middle">等待、掉率、命中条、奖励、视觉</text>
+  <rect class="node core" x="1415" y="1875" width="300" height="70"/>
+  <text class="text" x="1565" y="1903" text-anchor="middle">接入原流程</text>
+  <text class="small" x="1565" y="1926" text-anchor="middle">cast / rollCatch / hitbar / result</text>
+
+  <rect class="node" x="190" y="2025" width="280" height="62"/>
+  <text class="text" x="330" y="2051" text-anchor="middle">新增数据表</text>
+  <text class="small" x="330" y="2073" text-anchor="middle">SEASONS / WEATHERS / EFFECTS</text>
+  <rect class="node" x="590" y="2025" width="280" height="62"/>
+  <text class="text" x="730" y="2051" text-anchor="middle">新增函数</text>
+  <text class="small" x="730" y="2073" text-anchor="middle">calendar / forecast / env</text>
+  <rect class="node" x="990" y="2025" width="280" height="62"/>
+  <text class="text" x="1130" y="2051" text-anchor="middle">新增 UI</text>
+  <text class="small" x="1130" y="2073" text-anchor="middle">topbar / weatherModal / scene</text>
+  <rect class="node" x="1390" y="2025" width="280" height="62"/>
+  <text class="text" x="1530" y="2051" text-anchor="middle">存档兼容</text>
+  <text class="small" x="1530" y="2073" text-anchor="middle">normalize 补默认字段</text>
+  <path class="soft" d="M375 1910 L430 1910"/>
+  <path class="soft" d="M690 1910 L745 1910"/>
+  <path class="soft" d="M1005 1910 L1060 1910"/>
+  <path class="soft" d="M1360 1910 L1415 1910"/>
+  <path class="soft" d="M245 1945 C250 1985 290 2005 330 2025"/>
+  <path class="soft" d="M875 1945 C850 1980 790 2005 730 2025"/>
+  <path class="soft" d="M1565 1945 C1500 1985 1250 1998 1130 2025"/>
+  <path class="soft" d="M1210 1945 C1300 1990 1450 2005 1530 2025"/>
+
+  <rect class="lane" x="70" y="2255" width="1760" height="245"/>
+  <text class="laneTitle" x="105" y="2302">5. 完整验收与发布</text>
+  <rect class="node done" x="115" y="2340" width="260" height="58"/>
+  <text class="text" x="245" y="2374" text-anchor="middle">原主循环不回归</text>
+  <rect class="node done" x="430" y="2340" width="260" height="58"/>
+  <text class="text" x="560" y="2374" text-anchor="middle">外围系统全保留</text>
+  <rect class="node done" x="745" y="2340" width="260" height="58"/>
+  <text class="text" x="875" y="2374" text-anchor="middle">天气/季节数值稳定</text>
+  <rect class="node done" x="1060" y="2340" width="260" height="58"/>
+  <text class="text" x="1190" y="2374" text-anchor="middle">旧存档兼容</text>
+  <rect class="node done" x="1375" y="2340" width="260" height="58"/>
+  <text class="text" x="1505" y="2374" text-anchor="middle">小屏 UI 验证</text>
+  <rect class="node start" x="760" y="2425" width="380" height="54"/>
+  <text class="text" x="950" y="2458" text-anchor="middle">npm run build:unified 后 Web / 微信验证</text>
+  <path class="soft" d="M375 2369 L430 2369"/>
+  <path class="soft" d="M690 2369 L745 2369"/>
+  <path class="soft" d="M1005 2369 L1060 2369"/>
+  <path class="soft" d="M1320 2369 L1375 2369"/>
+  <path class="arrow" d="M950 2398 L950 2425"/>
+
+  <text class="subtitle" x="80" y="2550">修正点：第二版是天气专题图；这一版是完整合并图，原有模块不删除，只在主循环和 UI/存档/数值中接入天气、预报、季节。</text>
+</svg>

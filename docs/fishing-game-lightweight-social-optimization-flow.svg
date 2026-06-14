@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="2700" viewBox="0 0 1900 2700">
+  <defs>
+    <style>
+      .bg { fill: #f5f8fc; }
+      .title { font: 700 38px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #142033; }
+      .subtitle { font: 500 18px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #586579; }
+      .lane { fill: #ffffff; stroke: #d7e0ee; stroke-width: 2; rx: 20; }
+      .laneTitle { font: 700 24px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #14213d; }
+      .node { fill: #ffffff; stroke: #8ba0ba; stroke-width: 2; rx: 12; }
+      .start { fill: #e8f8ef; stroke: #31a66a; }
+      .core { fill: #eaf6ff; stroke: #2f8fd7; }
+      .social { fill: #f1ecff; stroke: #7b61ff; }
+      .weather { fill: #ecfff8; stroke: #14a36f; }
+      .cut { fill: #fff0ef; stroke: #e45d55; }
+      .keep { fill: #fff4de; stroke: #d99b1d; }
+      .done { fill: #eafcff; stroke: #00a6c8; }
+      .decision { fill: #fff9e8; stroke: #dfa400; }
+      .text { font: 500 17px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #1f2b3d; }
+      .small { font: 500 14px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #526071; }
+      .tiny { font: 500 12px "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #647086; }
+      .arrow { fill: none; stroke: #596579; stroke-width: 2.2; marker-end: url(#arrow); }
+      .soft { fill: none; stroke: #8693a6; stroke-width: 1.8; marker-end: url(#softArrow); }
+      .dash { fill: none; stroke: #8693a6; stroke-width: 1.8; stroke-dasharray: 7 7; marker-end: url(#softArrow); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#596579"/>
+    </marker>
+    <marker id="softArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M1,1 L8,5 L1,9 Z" fill="#8693a6"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1900" height="2700"/>
+  <text class="title" x="80" y="72">钓鱼游戏轻度化 + 社交排行榜优化流程图</text>
+  <text class="subtitle" x="80" y="108">保留排行榜传播元素：失败后再来一次、分享获次数、省份排行榜；同时删除重度养成干扰</text>
+
+  <rect class="node start" x="720" y="145" width="460" height="74"/>
+  <text class="text" x="950" y="176" text-anchor="middle">目标确认 0.5人日</text>
+  <text class="small" x="950" y="200" text-anchor="middle">轻度钓鱼 + 图鉴收集 + 天气季节 + 省份榜</text>
+
+  <rect class="lane" x="70" y="260" width="1760" height="325"/>
+  <text class="laneTitle" x="105" y="307">1. 系统取舍与入口重构（4.5人日）</text>
+  <rect class="node keep" x="115" y="345" width="260" height="66"/>
+  <text class="text" x="245" y="372" text-anchor="middle">保留: 钓鱼主循环</text>
+  <text class="small" x="245" y="394" text-anchor="middle">核心按钮、等待、命中、结算</text>
+  <rect class="node keep" x="420" y="345" width="260" height="66"/>
+  <text class="text" x="550" y="372" text-anchor="middle">保留: 图鉴</text>
+  <text class="small" x="550" y="394" text-anchor="middle">收集进度、限定鱼、目标提示</text>
+  <rect class="node keep" x="725" y="345" width="260" height="66"/>
+  <text class="text" x="855" y="372" text-anchor="middle">保留: 鱼饵/商店</text>
+  <text class="small" x="855" y="394" text-anchor="middle">补充当前鱼饵、一键购买</text>
+  <rect class="node keep" x="1030" y="345" width="260" height="66"/>
+  <text class="text" x="1160" y="372" text-anchor="middle">保留: 鱼竿</text>
+  <text class="small" x="1160" y="394" text-anchor="middle">自然解锁、轻外观、轻手感</text>
+  <rect class="node social" x="1335" y="345" width="260" height="66"/>
+  <text class="text" x="1465" y="372" text-anchor="middle">保留: 排行榜</text>
+  <text class="small" x="1465" y="394" text-anchor="middle">省份榜、个人记录、可选好友榜</text>
+
+  <rect class="node cut" x="240" y="470" width="260" height="66"/>
+  <text class="text" x="370" y="497" text-anchor="middle">删除/隐藏</text>
+  <text class="small" x="370" y="519" text-anchor="middle">首饰、VIP自动、兑换码</text>
+  <rect class="node cut" x="585" y="470" width="260" height="66"/>
+  <text class="text" x="715" y="497" text-anchor="middle">抽奖降级</text>
+  <text class="small" x="715" y="519" text-anchor="middle">改每日奖励或成就奖励</text>
+  <rect class="node keep" x="930" y="470" width="260" height="66"/>
+  <text class="text" x="1060" y="497" text-anchor="middle">角色/宠物降级</text>
+  <text class="small" x="1060" y="519" text-anchor="middle">保留外观，不叠复杂倍率</text>
+  <rect class="node weather" x="1275" y="470" width="260" height="66"/>
+  <text class="text" x="1405" y="497" text-anchor="middle">天气季节保留</text>
+  <text class="small" x="1405" y="519" text-anchor="middle">每日变化、限定收集</text>
+
+  <path class="arrow" d="M950 219 L950 260"/>
+
+  <rect class="lane" x="70" y="635" width="1760" height="420"/>
+  <text class="laneTitle" x="105" y="682">2. 轻度核心单局闭环（4.0人日）</text>
+  <rect class="node start" x="115" y="725" width="210" height="62"/>
+  <text class="text" x="220" y="750" text-anchor="middle">进入主界面</text>
+  <text class="small" x="220" y="772" text-anchor="middle">今日天气 + 剩余次数</text>
+  <polygon class="decision" points="490,712 635,756 490,800 345,756"/>
+  <text class="text" x="490" y="752" text-anchor="middle">有次数?</text>
+  <rect class="node core" x="690" y="725" width="210" height="62"/>
+  <text class="text" x="795" y="750" text-anchor="middle">抛竿</text>
+  <text class="small" x="795" y="772" text-anchor="middle">扣鱼饵/次数</text>
+  <rect class="node core" x="955" y="725" width="210" height="62"/>
+  <text class="text" x="1060" y="750" text-anchor="middle">等待上钩</text>
+  <text class="small" x="1060" y="772" text-anchor="middle">天气影响等待</text>
+  <rect class="node core" x="1220" y="725" width="210" height="62"/>
+  <text class="text" x="1325" y="750" text-anchor="middle">命中条</text>
+  <text class="small" x="1325" y="772" text-anchor="middle">轻操作挑战</text>
+  <polygon class="decision" points="1610,712 1755,756 1610,800 1465,756"/>
+  <text class="text" x="1610" y="752" text-anchor="middle">成功?</text>
+
+  <rect class="node done" x="1225" y="885" width="260" height="62"/>
+  <text class="text" x="1355" y="910" text-anchor="middle">钓获结果</text>
+  <text class="small" x="1355" y="932" text-anchor="middle">图鉴、最大重量、分数</text>
+  <rect class="node social" x="820" y="885" width="260" height="62"/>
+  <text class="text" x="950" y="910" text-anchor="middle">失败页</text>
+  <text class="small" x="950" y="932" text-anchor="middle">差一点 + 再来一次</text>
+  <rect class="node" x="450" y="885" width="260" height="62"/>
+  <text class="text" x="580" y="910" text-anchor="middle">保存记录</text>
+  <text class="small" x="580" y="932" text-anchor="middle">金币、图鉴、排行分</text>
+  <path class="arrow" d="M325 756 L345 756"/>
+  <path class="arrow" d="M635 756 L690 756"/>
+  <path class="arrow" d="M900 756 L955 756"/>
+  <path class="arrow" d="M1165 756 L1220 756"/>
+  <path class="arrow" d="M1430 756 L1465 756"/>
+  <path class="soft" d="M1610 800 C1580 850 1480 872 1410 885"/>
+  <path class="soft" d="M1465 756 C1320 840 1090 865 995 885"/>
+  <path class="soft" d="M490 800 C500 840 865 855 930 885"/>
+  <path class="arrow" d="M1225 916 L1080 916"/>
+  <path class="arrow" d="M820 916 L710 916"/>
+  <path class="dash" d="M580 885 C330 850 240 820 220 787"/>
+
+  <rect class="lane" x="70" y="1105" width="1760" height="390"/>
+  <text class="laneTitle" x="105" y="1152">3. 失败后分享获取次数（2.5人日）</text>
+  <rect class="node social" x="115" y="1195" width="260" height="66"/>
+  <text class="text" x="245" y="1222" text-anchor="middle">失败/次数不足页</text>
+  <text class="small" x="245" y="1244" text-anchor="middle">差距刺激 + 省榜差距</text>
+  <polygon class="decision" points="560,1185 720,1228 560,1271 400,1228"/>
+  <text class="text" x="560" y="1224" text-anchor="middle">选择再来一次</text>
+  <rect class="node social" x="770" y="1195" width="240" height="66"/>
+  <text class="text" x="890" y="1222" text-anchor="middle">分享给朋友</text>
+  <text class="small" x="890" y="1244" text-anchor="middle">每日上限 + 回流判断</text>
+  <rect class="node" x="1060" y="1195" width="240" height="66"/>
+  <text class="text" x="1180" y="1222" text-anchor="middle">等待恢复</text>
+  <text class="small" x="1180" y="1244" text-anchor="middle">自然恢复次数</text>
+  <rect class="node" x="1350" y="1195" width="240" height="66"/>
+  <text class="text" x="1470" y="1222" text-anchor="middle">金币/广告兜底</text>
+  <text class="small" x="1470" y="1244" text-anchor="middle">降低强制分享风险</text>
+  <rect class="node done" x="790" y="1365" width="320" height="62"/>
+  <text class="text" x="950" y="1390" text-anchor="middle">增加1次机会</text>
+  <text class="small" x="950" y="1412" text-anchor="middle">回到主界面继续钓鱼</text>
+  <path class="arrow" d="M375 1228 L400 1228"/>
+  <path class="arrow" d="M720 1228 L770 1228"/>
+  <path class="soft" d="M720 1228 C850 1170 980 1170 1060 1228"/>
+  <path class="soft" d="M720 1228 C1020 1120 1280 1150 1350 1228"/>
+  <path class="arrow" d="M890 1261 C890 1315 915 1340 935 1365"/>
+  <path class="soft" d="M1180 1261 C1160 1325 1080 1350 1030 1365"/>
+  <path class="soft" d="M1470 1261 C1360 1335 1195 1352 1100 1365"/>
+
+  <rect class="lane" x="70" y="1545" width="1760" height="445"/>
+  <text class="laneTitle" x="105" y="1592">4. 天气、季节与预报（5.5人日）</text>
+  <rect class="node weather" x="115" y="1635" width="260" height="66"/>
+  <text class="text" x="245" y="1662" text-anchor="middle">天气/季节模型</text>
+  <text class="small" x="245" y="1684" text-anchor="middle">SEASONS / WEATHERS</text>
+  <rect class="node weather" x="430" y="1635" width="260" height="66"/>
+  <text class="text" x="560" y="1662" text-anchor="middle">未来预报</text>
+  <text class="small" x="560" y="1684" text-anchor="middle">未来 3-7 天稳定展示</text>
+  <rect class="node weather" x="745" y="1635" width="260" height="66"/>
+  <text class="text" x="875" y="1662" text-anchor="middle">鱼池影响</text>
+  <text class="small" x="875" y="1684" text-anchor="middle">限定鱼、稀有度、奖励</text>
+  <rect class="node weather" x="1060" y="1635" width="260" height="66"/>
+  <text class="text" x="1190" y="1662" text-anchor="middle">场景反馈</text>
+  <text class="small" x="1190" y="1684" text-anchor="middle">雨雪雾雷、季节色调</text>
+  <rect class="node done" x="1375" y="1635" width="260" height="66"/>
+  <text class="text" x="1505" y="1662" text-anchor="middle">数值抽样</text>
+  <text class="small" x="1505" y="1684" text-anchor="middle">收益和难度不失控</text>
+  <rect class="node weather" x="430" y="1810" width="1040" height="66"/>
+  <text class="text" x="950" y="1837" text-anchor="middle">今日环境入口：今日天气 + 推荐鱼饵 + 可能出现的限定鱼</text>
+  <text class="small" x="950" y="1859" text-anchor="middle">天气用于每日变化和收集目标，不堆复杂倍率解释</text>
+  <path class="arrow" d="M375 1668 L430 1668"/>
+  <path class="arrow" d="M690 1668 L745 1668"/>
+  <path class="arrow" d="M1005 1668 L1060 1668"/>
+  <path class="arrow" d="M1320 1668 L1375 1668"/>
+  <path class="soft" d="M560 1701 L680 1810"/>
+  <path class="soft" d="M875 1701 L875 1810"/>
+  <path class="soft" d="M1190 1701 L1060 1810"/>
+
+  <rect class="lane" x="70" y="2040" width="1760" height="435"/>
+  <text class="laneTitle" x="105" y="2087">5. 排行榜与省份榜单（8.5人日，好友榜另加约2人日）</text>
+  <rect class="node core" x="115" y="2130" width="230" height="64"/>
+  <text class="text" x="230" y="2156" text-anchor="middle">钓获结算</text>
+  <text class="small" x="230" y="2178" text-anchor="middle">稀有度/重量/限定加分</text>
+  <rect class="node social" x="400" y="2130" width="230" height="64"/>
+  <text class="text" x="515" y="2156" text-anchor="middle">分数模型</text>
+  <text class="small" x="515" y="2178" text-anchor="middle">个人最佳/每日总分</text>
+  <rect class="node social" x="685" y="2130" width="230" height="64"/>
+  <text class="text" x="800" y="2156" text-anchor="middle">后端提交</text>
+  <text class="small" x="800" y="2178" text-anchor="middle">用户、省份、日期、score</text>
+  <rect class="node social" x="970" y="2130" width="230" height="64"/>
+  <text class="text" x="1085" y="2156" text-anchor="middle">基础防作弊</text>
+  <text class="small" x="1085" y="2178" text-anchor="middle">次数、范围、重复提交</text>
+  <rect class="node social" x="1255" y="2130" width="230" height="64"/>
+  <text class="text" x="1370" y="2156" text-anchor="middle">省份榜查询</text>
+  <text class="small" x="1370" y="2178" text-anchor="middle">全国/省份/个人名次</text>
+  <rect class="node done" x="1540" y="2130" width="230" height="64"/>
+  <text class="text" x="1655" y="2156" text-anchor="middle">排行榜页</text>
+  <text class="small" x="1655" y="2178" text-anchor="middle">超过本省X%玩家</text>
+
+  <rect class="node social" x="315" y="2295" width="300" height="62"/>
+  <text class="text" x="465" y="2320" text-anchor="middle">失败页榜单刺激</text>
+  <text class="small" x="465" y="2342" text-anchor="middle">再来一次即可冲本省排名</text>
+  <rect class="node social" x="800" y="2295" width="300" height="62"/>
+  <text class="text" x="950" y="2320" text-anchor="middle">结果页战绩分享</text>
+  <text class="small" x="950" y="2342" text-anchor="middle">分享稀有鱼/省份排名</text>
+  <rect class="node social" x="1285" y="2295" width="300" height="62"/>
+  <text class="text" x="1435" y="2320" text-anchor="middle">好友榜可选</text>
+  <text class="small" x="1435" y="2342" text-anchor="middle">微信开放数据域 +2人日</text>
+  <path class="arrow" d="M345 2162 L400 2162"/>
+  <path class="arrow" d="M630 2162 L685 2162"/>
+  <path class="arrow" d="M915 2162 L970 2162"/>
+  <path class="arrow" d="M1200 2162 L1255 2162"/>
+  <path class="arrow" d="M1485 2162 L1540 2162"/>
+  <path class="soft" d="M515 2194 C500 2235 480 2265 465 2295"/>
+  <path class="soft" d="M1370 2194 C1230 2265 1080 2285 950 2295"/>
+  <path class="soft" d="M1655 2194 C1600 2255 1515 2280 1435 2295"/>
+
+  <rect class="lane" x="70" y="2520" width="1760" height="120"/>
+  <text class="laneTitle" x="105" y="2567">6. 验收发布（3.0人日）</text>
+  <text class="text" x="115" y="2612">埋点 0.75d  →  存档迁移 0.75d  →  小屏/真机/低端机测试 1.25d  →  build:unified 与微信预览 0.75d</text>
+
+  <text class="subtitle" x="80" y="2670">标准版合计约 24 到 31 人日；如果省份榜先做本地模拟，可压缩到约 17 到 22 人日。</text>
+</svg>
