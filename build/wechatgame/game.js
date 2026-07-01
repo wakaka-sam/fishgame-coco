@@ -8,11 +8,21 @@ ctx.scale(DPR, DPR);
 
 const W = sys.windowWidth;
 const H = sys.windowHeight;
+const DESIGN_W = 1080;
+const DESIGN_H = 2334;
 const SAVE_KEY = 'fish-coco-wechatgame-save';
+const PLAYER_ID_KEY = 'fish-coco-player-id';
+const API_BASE = typeof window === 'undefined' ? 'https://fish.wakaka007.cn' : '';
 const MINI_SAFE_TOP = Math.max(
   0,
   sys.statusBarHeight || 0,
   sys.safeArea && typeof sys.safeArea.top === 'number' ? sys.safeArea.top : 0
+);
+const MINI_SAFE_BOTTOM = Math.max(
+  0,
+  sys.safeArea && typeof sys.safeArea.height === 'number'
+    ? sys.windowHeight - (sys.safeArea.top || 0) - sys.safeArea.height
+    : 0
 );
 const PAGE_PAD = 8;
 const CONTENT_W = Math.min(W - PAGE_PAD * 2, 700);
@@ -147,11 +157,11 @@ const TREASURE = [
   { id: 'chest', name: '宝箱', rarity: 'treasure', value: 10000, icon: '箱' },
 ];
 const RODS = [
-  { id: 'wood', name: '木竿', threshold: 0, color: '#5d4037', hi: '#8d6e63', desc: '朴素的木质鱼竿' },
-  { id: 'bamboo', name: '竹竿', threshold: 3, color: '#6d9b3a', hi: '#8bc34a', desc: '翠绿的竹节鱼竿' },
-  { id: 'iron', name: '铁竿', threshold: 8, color: '#607d8b', hi: '#90a4ae', desc: '坚固的铁质鱼竿' },
-  { id: 'gold', name: '黄金竿', threshold: 15, color: '#f9a825', hi: '#ffd54f', desc: '闪耀的黄金鱼竿' },
-  { id: 'star', name: '星辰竿', threshold: 28, color: '#1a237e', hi: '#ffd700', desc: '蕴含星辰之力的终极鱼竿' },
+  { id: 'wood', name: '木竿', threshold: 0, price: 0, color: '#5d4037', hi: '#8d6e63', desc: '朴素的木质鱼竿' },
+  { id: 'bamboo', name: '竹竿', threshold: 3, price: 300, color: '#6d9b3a', hi: '#8bc34a', desc: '翠绿的竹节鱼竿' },
+  { id: 'iron', name: '铁竿', threshold: 8, price: 1200, color: '#607d8b', hi: '#90a4ae', desc: '坚固的铁质鱼竿' },
+  { id: 'gold', name: '黄金竿', threshold: 15, price: 3600, color: '#f9a825', hi: '#ffd54f', desc: '闪耀的黄金鱼竿' },
+  { id: 'star', name: '星辰竿', threshold: 28, price: 8800, color: '#1a237e', hi: '#ffd700', desc: '蕴含星辰之力的终极鱼竿' },
 ];
 const GACHA_RODS = [
   { id: 'panda', name: '熊猫竿', icon: '熊', color: '#222', hi: '#fff', desc: '金币抽奖限定' },
@@ -204,17 +214,49 @@ const MOCK_PROVINCE_RANKS = [
   { name: '湖边新星', score: 9650 },
   { name: '像素钓手', score: 7420 },
 ];
+const MOCK_NATIONAL_RANKS = [
+  { name: '全国钓王', province: '广东', score: 26880, bestFish: '海蛇神', bestWeight: 320 },
+  { name: '暴雨冲榜手', province: '浙江', score: 22420, bestFish: '凤凰鱼', bestWeight: 18.6 },
+  { name: '深海收藏家', province: '江苏', score: 19860, bestFish: '幼海蛇神', bestWeight: 210 },
+  { name: '湖边冠军', province: '四川', score: 17640, bestFish: '锦鲤', bestWeight: 4.8 },
+];
+const MOCK_PROVINCE_WAR_RANKS = [
+  { province: '广东', name: '广东队', score: 88600, members: 238, todayCatches: 620, bestPlayer: '珠江钓王', topScore: 16660 },
+  { province: '浙江', name: '浙江队', score: 82450, members: 211, todayCatches: 588, bestPlayer: '西湖鱼客', topScore: 15420 },
+  { province: '江苏', name: '江苏队', score: 79220, members: 197, todayCatches: 540, bestPlayer: '太湖猎手', topScore: 14880 },
+  { province: '四川', name: '四川队', score: 73510, members: 184, todayCatches: 501, bestPlayer: '锦江钓手', topScore: 13940 },
+];
+const RANK_SCOPES = [
+  ['provinceWar', '省队战'],
+  ['province', '本省榜'],
+  ['national', '全国榜'],
+];
+const DAILY_GOALS = [
+  { id: 'catch1', icon: '首', name: '完成首钓', desc: '今天任意钓获 1 次', target: 1, metric: 'catchCount', reward: { money: 80 } },
+  { id: 'catch3', icon: '练', name: '稳定练手', desc: '今天累计钓获 3 次', target: 3, metric: 'catchCount', reward: { money: 160 } },
+  { id: 'score500', icon: '分', name: '省队贡献', desc: '今日累计获得 500 分', target: 500, metric: 'todayScore', reward: { money: 220 } },
+  { id: 'checkWeather', icon: '天', name: '查看天气', desc: '打开天气预报 1 次', target: 1, metric: 'weatherSeen', reward: { money: 60 } },
+  { id: 'openDex', icon: '鉴', name: '整理图鉴', desc: '打开鱼类图鉴 1 次', target: 1, metric: 'dexSeen', reward: { money: 60 } },
+];
 const TOP_BUTTONS = [
-  ['shop', '鱼饵'], ['dex', '图鉴'], ['rod', '鱼竿'], ['weather', '天气'], ['rank', '排行'],
+  ['shop', '商店'], ['dex', '图鉴'], ['task', '任务'], ['weather', '天气'], ['rank', '排行'],
 ];
 const TOP_EMOJI = {
   shop: '🎁',
   dex: '📖',
+  task: '✅',
   rod: '🎣',
   weather: '☁',
   rank: '🏆',
 };
 const BAIT_IDS = Object.keys(BAITS);
+const FISH_DEX_FILTERS = [
+  ['all', '全部'],
+  ['common', '普通'],
+  ['rare', '稀有'],
+  ['legendary', '传说'],
+  ['hidden', '隐藏'],
+];
 const TOP_ASSETS = {
   shop: 'ui_shop',
   dex: 'ui_dex',
@@ -222,15 +264,57 @@ const TOP_ASSETS = {
   weather: 'ui_share',
   rank: 'ui_rank',
 };
+const UI_LAYOUT_ASSETS = [
+  'scene',
+  'base',
+  'menu_bag',
+  'menu_shop',
+  'menu_rank',
+  'menu_task',
+  'menu_dex',
+  'menu_more',
+  'menu_collection',
+  'menu_idle',
+  'event_alert',
+  'control_meter',
+  'button_cast',
+  'rod_current',
+  'button_tackle',
+  'button_bait',
+];
 const ASSET_PATHS = {};
 const IMAGES = {};
 
 registerAssets();
 preloadAssets();
 
+function randomIdPart() {
+  return Math.random().toString(36).slice(2, 10);
+}
+function localPlayerId() {
+  try {
+    let id = wx.getStorageSync(PLAYER_ID_KEY);
+    id = String(id || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+    if (!id) {
+      id = `fc_${Date.now().toString(36)}_${randomIdPart()}`;
+      wx.setStorageSync(PLAYER_ID_KEY, id);
+    }
+    return id;
+  } catch (_) {
+    return `fc_${randomIdPart()}`;
+  }
+}
+function normalizeUsername(value) {
+  const text = String(value || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+  return text || localPlayerId();
+}
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function freshUser() {
   return {
-    username: '微信玩家',
+    username: localPlayerId(),
     money: 100,
     diamonds: 0,
     baits: { worm: 5, shrimp: 0, lure: 0, magic: 0, divine: 0 },
@@ -252,7 +336,9 @@ function freshUser() {
     province: '广东',
     ranking: { bestScore: 0, bestFish: '', bestWeight: 0, todayScore: 0, lastScoreDate: '' },
     calendar: { dayKey: '', season: 'spring', forecast: [] },
+    daily: freshDaily(),
     lastFailure: null,
+    lastShareDate: '',
   };
 }
 
@@ -260,13 +346,25 @@ let user = loadUser();
 let state = { phase: 'idle', hookX: W * 0.52, hookY: 250, wait: 0, bite: 0 };
 let hb = { active: false, catch: null, hits: 0, need: 0, cursor: 0, dir: 1, zone: 0.4, width: 0.18, speed: 1, time: 12 };
 let modal = null;
-let status = '准备好后选择鱼饵抛竿';
+let status = user.stats.totalCatches ? '准备好后选择鱼饵抛竿' : '先点下方抛竿，完成今日目标';
 let targets = [];
 let last = Date.now();
+let shopTab = 'bait';
 let gachaTab = 'coins';
 let gachaSeason = 1;
 let vipTimer = 0;
-let activeDexBait = BAIT_IDS.includes('worm') ? 'worm' : BAIT_IDS[0];
+let activeFishDexFilter = 'all';
+let fishDexPage = 0;
+let backendReady = false;
+let backendSaveTimer = null;
+let rankScope = 'provinceWar';
+let rankCache = { provinceWar: null, province: null, national: null };
+let rankMeta = {
+  provinceWar: { total: 0, selfRank: 0, beatPercent: 0 },
+  province: { total: 0, selfRank: 0, beatPercent: 0 },
+  national: { total: 0, selfRank: 0, beatPercent: 0 },
+};
+let rankLoading = false;
 
 function loadUser() {
   try {
@@ -278,21 +376,24 @@ function loadUser() {
 }
 function normalize(u) {
   const f = freshUser();
+  u.username = normalizeUsername(u.username);
   u.baits = { ...f.baits, ...(u.baits || {}) };
   u.dex = u.dex || {};
   u.stats = { ...f.stats, ...(u.stats || {}) };
   u.history = Array.isArray(u.history) ? u.history : [];
   u.ownedRods = Array.isArray(u.ownedRods) ? u.ownedRods : [];
+  if (!u.ownedRods.includes('wood')) u.ownedRods.unshift('wood');
   u.ownedCharacters = Array.isArray(u.ownedCharacters) ? u.ownedCharacters : ['fishing_master'];
   if (!u.ownedCharacters.includes('fishing_master')) u.ownedCharacters.unshift('fishing_master');
   u.characterFragments = u.characterFragments || {};
   u.ownedPets = Array.isArray(u.ownedPets) ? u.ownedPets : [];
   u.accessories = Array.isArray(u.accessories) ? u.accessories : [];
-  u.vipAuto = false;
+  u.vipAuto = !!u.vipAuto;
   u.chances = { ...f.chances, ...(u.chances || {}) };
   u.province = PROVINCES.includes(u.province) ? u.province : f.province;
   u.ranking = { ...f.ranking, ...(u.ranking || {}) };
   u.calendar = ensureCalendar({ ...f.calendar, ...(u.calendar || {}) });
+  u.daily = ensureDaily({ ...f.daily, ...(u.daily || {}) });
   u.lastFailure = u.lastFailure || null;
   const today = dateKey();
   if (u.chances.lastDate !== today) {
@@ -306,9 +407,105 @@ function normalize(u) {
   }
   return u;
 }
-function saveUser() {
+function persistLocalUser() {
   normalize(user);
   wx.setStorageSync(SAVE_KEY, user);
+}
+function saveUser() {
+  persistLocalUser();
+  scheduleBackendSave();
+}
+function backendAvailable() {
+  return typeof fetch === 'function' || (wx && typeof wx.request === 'function');
+}
+function apiPost(path, body) {
+  if (!backendAvailable()) return Promise.reject(new Error('当前环境不支持网络请求'));
+  const payload = JSON.stringify(body || {});
+  if (typeof fetch === 'function') {
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: payload,
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    });
+  }
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: API_BASE + path,
+      method: 'POST',
+      header: { 'content-type': 'application/json' },
+      data: body || {},
+      success(res) {
+        const data = res.data || {};
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(data);
+        else reject(new Error(data.error || `HTTP ${res.statusCode}`));
+      },
+      fail(err) {
+        reject(new Error(err && err.errMsg ? err.errMsg : '网络请求失败'));
+      },
+    });
+  });
+}
+function scheduleBackendSave(delay = 600) {
+  if (!backendAvailable()) return;
+  clearTimeout(backendSaveTimer);
+  backendSaveTimer = setTimeout(() => {
+    const snapshot = cloneJson(normalize(user));
+    apiPost('/api/save', { username: snapshot.username, state: snapshot })
+      .then(() => { backendReady = true; })
+      .catch((error) => {
+        backendReady = false;
+        console.warn('cloud save failed', error);
+      });
+  }, delay);
+}
+async function syncBackendUser() {
+  if (!backendAvailable()) return;
+  const snapshot = cloneJson(normalize(user));
+  try {
+    const remote = await apiPost('/api/login', { username: snapshot.username, state: snapshot });
+    const pendingRewards = remote.pendingRankRewards || [];
+    delete remote.pendingRankRewards;
+    user = normalize({ ...snapshot, ...remote });
+    persistLocalUser();
+    backendReady = true;
+    status = pendingRewards.length ? '云端存档已同步，获得排名奖励' : '云端存档已同步';
+    loadRank(rankScope);
+  } catch (error) {
+    backendReady = false;
+    status = '云端同步失败，使用本地存档';
+    console.warn('cloud login failed', error);
+  }
+}
+async function loadRank(scope = rankScope) {
+  if (!backendAvailable() || rankLoading) return;
+  const safeScope = scope === 'national' ? 'national' : scope === 'province' ? 'province' : 'provinceWar';
+  rankLoading = true;
+  const snapshot = cloneJson(normalize(user));
+  try {
+    const body = { username: snapshot.username, scope: safeScope, state: snapshot };
+    if (safeScope === 'province') body.province = snapshot.province;
+    const data = await apiPost('/api/leaderboard', body);
+    rankCache[safeScope] = Array.isArray(data.rows) ? data.rows : null;
+    rankMeta[safeScope] = {
+      total: Math.max(0, Number(data.total) || 0),
+      selfRank: Math.max(0, Number(data.selfRank) || 0),
+      beatPercent: Math.max(0, Math.min(99, Number(data.beatPercent) || 0)),
+      generatedAt: data.generatedAt || Date.now(),
+    };
+    backendReady = true;
+  } catch (error) {
+    backendReady = false;
+    console.warn('rank load failed', error);
+  } finally {
+    rankLoading = false;
+  }
+}
+function loadProvinceRank() {
+  return loadRank('province');
 }
 function addTarget(id, x, y, w, h, data) {
   targets.push({ id, x, y, w, h, data });
@@ -324,6 +521,28 @@ function pad2(n) {
 }
 function dateKey(date = new Date()) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+function freshDaily(dayKey = dateKey()) {
+  return {
+    dayKey,
+    claimed: {},
+    weatherSeen: false,
+    dexSeen: false,
+    guideSeen: false,
+  };
+}
+function ensureDaily(daily) {
+  const today = dateKey();
+  const source = daily || {};
+  const sourceDay = source.dayKey || source.date || '';
+  if (sourceDay !== today) return freshDaily(today);
+  return {
+    dayKey: today,
+    claimed: source.claimed && typeof source.claimed === 'object' ? source.claimed : {},
+    weatherSeen: !!source.weatherSeen,
+    dexSeen: !!source.dexSeen,
+    guideSeen: !!source.guideSeen,
+  };
 }
 function addDays(date, days) {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -424,21 +643,213 @@ function catchScore(c) {
   const envBonus = Math.round(base * (env.rarityBoost + env.valueBonus));
   return base + weightScore + envBonus;
 }
-function provinceRankRows() {
-  const own = { name: user.username, score: user.ranking.bestScore || 0, self: true };
-  return [own].concat(MOCK_PROVINCE_RANKS).sort((a, b) => b.score - a.score);
+function rankLabel(scope = rankScope) {
+  if (scope === 'provinceWar') return '省队冲榜';
+  return scope === 'national' ? '全国榜' : `${user.province}省份榜`;
+}
+function rankRows(scope = rankScope) {
+  const safeScope = scope === 'national' ? 'national' : scope === 'province' ? 'province' : 'provinceWar';
+  if (safeScope === 'provinceWar') {
+    const cachedRows = rankCache.provinceWar;
+    const remoteRows = Array.isArray(cachedRows) && cachedRows.length
+      ? cachedRows.map((row) => ({
+        province: row.province || row.name,
+        name: row.name || `${row.province}队`,
+        score: row.score || row.todayScore || 0,
+        todayScore: row.todayScore || row.score || 0,
+        members: row.members || 0,
+        todayCatches: row.todayCatches || 0,
+        bestPlayer: row.bestPlayer || '',
+        topScore: row.topScore || 0,
+        self: row.province === user.province || row.self === true,
+      }))
+      : MOCK_PROVINCE_WAR_RANKS.map((row) => ({ ...row, self: row.province === user.province }));
+    const byProvince = new Map(remoteRows.map((row) => [row.province, row]));
+    if (!byProvince.has(user.province)) {
+      byProvince.set(user.province, {
+        province: user.province,
+        name: `${user.province}队`,
+        score: user.ranking.todayScore || 0,
+        todayScore: user.ranking.todayScore || 0,
+        members: user.stats.totalCatches ? 1 : 0,
+        todayCatches: user.stats.totalCatches || 0,
+        bestPlayer: user.username,
+        topScore: user.ranking.bestScore || 0,
+        self: true,
+      });
+    }
+    return [...byProvince.values()].sort((a, b) => (b.score || 0) - (a.score || 0) || (b.members || 0) - (a.members || 0));
+  }
+  const own = {
+    username: user.username,
+    name: user.username,
+    province: user.province,
+    score: user.ranking.bestScore || 0,
+    todayScore: user.ranking.todayScore || 0,
+    bestFish: user.ranking.bestFish || '',
+    bestWeight: user.ranking.bestWeight || 0,
+    totalCatches: user.stats.totalCatches || 0,
+    self: true,
+  };
+  const cachedRows = rankCache[safeScope];
+  const mockRows = safeScope === 'national' ? MOCK_NATIONAL_RANKS : MOCK_PROVINCE_RANKS;
+  const remoteRows = Array.isArray(cachedRows) && cachedRows.length
+    ? cachedRows.map((row) => ({
+      username: row.username || row.name,
+      name: row.name || row.username,
+      province: row.province || user.province,
+      score: row.score || 0,
+      todayScore: row.todayScore || 0,
+      totalCatches: row.totalCatches || 0,
+      bestFish: row.bestFish || '',
+      bestWeight: row.bestWeight || 0,
+      self: row.username === user.username || row.self === true,
+    }))
+    : mockRows;
+  const byName = new Map(remoteRows.map((row) => [row.name, row]));
+  const existing = byName.get(own.name) || {};
+  byName.set(own.name, { ...existing, ...own, score: Math.max(own.score, existing.score || 0), self: true });
+  return [...byName.values()].sort((a, b) => (b.score || 0) - (a.score || 0) || (b.todayScore || 0) - (a.todayScore || 0));
+}
+function rankSummary(scope = rankScope) {
+  const safeScope = scope === 'national' ? 'national' : scope === 'province' ? 'province' : 'provinceWar';
+  const rows = rankRows(safeScope);
+  const ownIndex = rows.findIndex((row) => row.self);
+  const fallbackRank = ownIndex >= 0 ? ownIndex + 1 : rows.length || 1;
+  const meta = rankMeta[safeScope] || {};
+  const total = Math.max(Number(meta.total) || 0, rows.length || 1, fallbackRank);
+  const selfRank = Number(meta.selfRank) > 0 ? Number(meta.selfRank) : fallbackRank;
+  const beatPercent = Number(meta.beatPercent) > 0
+    ? Math.round(Number(meta.beatPercent))
+    : Math.max(0, Math.min(99, Math.round((total - selfRank) / Math.max(1, total) * 100)));
+  const nextRow = rows[selfRank - 2] || null;
+  const ownRow = rows.find((row) => row.self) || null;
+  const ownScore = safeScope === 'provinceWar' ? (ownRow && ownRow.score || 0) : (user.ranking.bestScore || 0);
+  const gap = nextRow && !nextRow.self ? Math.max(0, (nextRow.score || 0) - ownScore + 1) : 0;
+  return { rows, total, selfRank, beatPercent, gap, nextRow, ownRow };
+}
+function rankSummaryText(scope = rankScope) {
+  const summary = rankSummary(scope);
+  if (scope === 'provinceWar') {
+    const base = `${user.province}队第 ${summary.selfRank}/${summary.total} 名 · 超过 ${summary.beatPercent}% 省队`;
+    if (summary.gap > 0) return `${base} · 距上一省 ${summary.gap} 分`;
+    return `${base} · 继续为本省上分`;
+  }
+  const base = `${rankLabel(scope)}第 ${summary.selfRank}/${summary.total} 名 · 超过 ${summary.beatPercent}% 玩家`;
+  if (summary.gap > 0) return `${base} · 距上一名 ${summary.gap} 分`;
+  return `${base} · 继续扩大领先`;
+}
+function todayCatchCount() {
+  const today = dateKey();
+  return (user.history || []).filter((item) => {
+    const at = Number(item && item.at) || 0;
+    return at && dateKey(new Date(at)) === today;
+  }).length;
+}
+function dailyGoalProgress(goal) {
+  user.daily = ensureDaily(user.daily);
+  if (goal.metric === 'catchCount') return todayCatchCount();
+  if (goal.metric === 'todayScore') return user.ranking.todayScore || 0;
+  if (goal.metric === 'weatherSeen') return user.daily.weatherSeen ? 1 : 0;
+  if (goal.metric === 'dexSeen') return user.daily.dexSeen ? 1 : 0;
+  return 0;
+}
+function dailyGoalReady(goal) {
+  return dailyGoalProgress(goal) >= goal.target;
+}
+function dailyGoalClaimed(goal) {
+  user.daily = ensureDaily(user.daily);
+  return !!user.daily.claimed[goal.id];
+}
+function dailyGoalRewardText(goal) {
+  const reward = goal.reward || {};
+  const parts = [];
+  if (reward.money) parts.push(`${reward.money}金币`);
+  if (reward.diamonds) parts.push(`${reward.diamonds}钻石`);
+  if (reward.chances) parts.push(`${reward.chances}次机会`);
+  return parts.join(' + ') || '奖励';
+}
+function dailyGoalCounts() {
+  const completed = DAILY_GOALS.filter((goal) => dailyGoalReady(goal)).length;
+  const claimed = DAILY_GOALS.filter((goal) => dailyGoalClaimed(goal)).length;
+  const claimable = DAILY_GOALS.filter((goal) => dailyGoalReady(goal) && !dailyGoalClaimed(goal)).length;
+  return { completed, claimed, claimable, total: DAILY_GOALS.length };
+}
+function applyDailyGoalReward(goal) {
+  const reward = goal.reward || {};
+  user.money += reward.money || 0;
+  user.diamonds += reward.diamonds || 0;
+  if (reward.chances) user.chances.left = Math.min(user.chances.max, (user.chances.left || 0) + reward.chances);
+}
+function claimDailyGoal(id) {
+  const goal = DAILY_GOALS.find((item) => item.id === id);
+  if (!goal) return;
+  user.daily = ensureDaily(user.daily);
+  if (user.daily.claimed[goal.id]) {
+    status = '这个目标奖励已经领取过了';
+    return;
+  }
+  if (!dailyGoalReady(goal)) {
+    status = '目标还没有完成，继续钓鱼或查看相关入口';
+    return;
+  }
+  applyDailyGoalReward(goal);
+  user.daily.claimed[goal.id] = true;
+  status = `已领取${goal.name}奖励：${dailyGoalRewardText(goal)}`;
+  saveUser();
+}
+function markDailyFlag(flag) {
+  user.daily = ensureDaily(user.daily);
+  if (!user.daily[flag]) {
+    user.daily[flag] = true;
+    saveUser();
+  }
+}
+function allFishDexItems() {
+  const byId = new Map();
+  BAIT_IDS.forEach((baitId) => {
+    const bait = BAITS[baitId];
+    bait.fishes.forEach((item) => {
+      if (!byId.has(item.id)) byId.set(item.id, { ...item, baitIds: [] });
+      const entry = byId.get(item.id);
+      if (!entry.baitIds.includes(baitId)) entry.baitIds.push(baitId);
+    });
+  });
+  return [...byId.values()];
+}
+function baitNamesForFish(item) {
+  return (item.baitIds || [])
+    .map((id) => BAITS[id] && BAITS[id].name)
+    .filter(Boolean)
+    .join(' / ');
+}
+function baitRaritySummary(bait) {
+  const counts = bait.fishes.reduce((acc, fish) => {
+    acc[fish.rarity] = (acc[fish.rarity] || 0) + 1;
+    return acc;
+  }, {});
+  return ['common', 'rare', 'legendary', 'hidden']
+    .filter((rarity) => counts[rarity])
+    .map((rarity) => `${RARITY_NAME[rarity]}${counts[rarity]}`)
+    .join(' · ');
+}
+function ownedRodList() {
+  const base = RODS.filter((rod) => user.ownedRods.includes(rod.id));
+  const gacha = GACHA_RODS.filter((rod) => user.ownedRods.includes(rod.id));
+  return base.concat(gacha).length ? base.concat(gacha) : [RODS[0]];
 }
 function activeRod() {
-  const dexCount = Object.keys(user.dex).length;
   const gacha = GACHA_RODS.find((r) => r.id === user.rodSkin && user.ownedRods.includes(r.id));
   if (gacha) return gacha;
-  const selected = RODS.find((r) => r.id === user.rodSkin && dexCount >= r.threshold);
+  const selected = RODS.find((r) => r.id === user.rodSkin && user.ownedRods.includes(r.id));
   if (selected) return selected;
-  return RODS.filter((r) => dexCount >= r.threshold).pop() || RODS[0];
+  return ownedRodList().filter((r) => RODS.some((base) => base.id === r.id)).pop() || RODS[0];
 }
 function nextRod() {
   const dexCount = Object.keys(user.dex).length;
-  return RODS.find((r) => dexCount < r.threshold) || null;
+  return RODS.find((r) => !user.ownedRods.includes(r.id) && dexCount >= r.threshold)
+    || RODS.find((r) => !user.ownedRods.includes(r.id))
+    || null;
 }
 function accessoryEffects() {
   const acc = user.accessories.find((a) => a.uid === user.equippedAccessory);
@@ -477,7 +888,7 @@ function cast() {
   if (state.phase !== 'idle') return;
   const count = user.baits[user.currentBait] || 0;
   if (count <= 0) {
-    status = '没有鱼饵了，去商店买点吧';
+    status = '鱼饵不足：点商店补货，也可先领今日目标奖励';
     return;
   }
   if ((user.chances.left || 0) <= 0) {
@@ -527,6 +938,7 @@ function hitbarClick() {
   hb.active = false;
   state.phase = 'idle';
   saveUser();
+  loadRank(rankScope);
 }
 function petBonus() {
   if (!user.activePet) return { coins: 0, diamonds: 0 };
@@ -571,6 +983,30 @@ function buyBait(id, count) {
   status = `购买 ${count} 个${bait.name}`;
   saveUser();
 }
+function buyRod(id) {
+  const rod = RODS.find((item) => item.id === id);
+  if (!rod) return;
+  const dexCount = Object.keys(user.dex).length;
+  if (dexCount < rod.threshold) {
+    status = `图鉴 ${dexCount}/${rod.threshold}，暂不能购买${rod.name}`;
+    return;
+  }
+  if (user.ownedRods.includes(id)) {
+    user.rodSkin = id;
+    status = `已装备${rod.name}`;
+    saveUser();
+    return;
+  }
+  if (user.money < rod.price) {
+    status = `金币不足，购买${rod.name}需要 ${rod.price}`;
+    return;
+  }
+  user.money -= rod.price;
+  user.ownedRods.push(id);
+  user.rodSkin = id;
+  status = `购买并装备${rod.name}`;
+  saveUser();
+}
 function askBuyBaitCount(id) {
   const bait = BAITS[id];
   if (!bait) return;
@@ -600,7 +1036,20 @@ function changeBait(delta) {
   status = `当前鱼饵：${BAITS[user.currentBait].name}`;
   saveUser();
 }
-function doGacha(count) {
+function changeRod(delta) {
+  if (state.phase !== 'idle') {
+    status = '钓鱼中不能切换鱼竿';
+    return;
+  }
+  const rods = ownedRodList();
+  const current = activeRod();
+  const index = Math.max(0, rods.findIndex((rod) => rod.id === current.id));
+  const next = rods[(index + delta + rods.length) % rods.length];
+  user.rodSkin = next.id;
+  status = `当前鱼竿：${next.name}`;
+  saveUser();
+}
+async function doGacha(count) {
   const isDiamond = gachaTab === 'diamonds';
   const cost = isDiamond ? (count === 10 ? 90 : 10) : (count === 10 ? (gachaSeason === 2 ? 100000 : 9000) : (gachaSeason === 2 ? 10000 : 1000));
   const cur = isDiamond ? 'diamonds' : 'money';
@@ -608,11 +1057,23 @@ function doGacha(count) {
     status = isDiamond ? '钻石不足' : '金币不足';
     return;
   }
-  user[cur] -= cost;
-  const results = [];
-  for (let i = 0; i < count; i++) results.push(applyGachaRoll());
-  modal.result = results;
-  saveUser();
+  status = '正在连接云端抽奖...';
+  try {
+    const data = await apiPost('/api/gacha', {
+      username: user.username,
+      count,
+      currency: gachaTab,
+      season: gachaSeason,
+      state: cloneJson(normalize(user)),
+    });
+    user = normalize(data.user || user);
+    persistLocalUser();
+    modal.result = Array.isArray(data.results) ? data.results : [];
+    status = '抽奖完成';
+    loadRank(rankScope);
+  } catch (error) {
+    status = error.message || '抽奖失败';
+  }
 }
 function addUnique(list, id) {
   if (!list.includes(id)) list.push(id);
@@ -688,14 +1149,37 @@ function applyGachaRoll() {
   user.money += 1;
   return { icon: '币', text: '1 金币', asset: 'ui_gacha' };
 }
+async function redeemCode(code) {
+  status = '正在兑换...';
+  try {
+    const data = await apiPost('/api/redeem', {
+      username: user.username,
+      code,
+      state: cloneJson(normalize(user)),
+    });
+    user = normalize(data.user || user);
+    persistLocalUser();
+    const reward = `${data.coins ? data.coins + '金币 ' : ''}${data.diamonds ? data.diamonds + '钻石' : ''}`.trim();
+    status = reward ? `兑换成功：${reward}` : '兑换成功';
+  } catch (error) {
+    status = error.message || '兑换失败';
+  }
+}
 
 function sceneTop() {
-  return TOPBAR_Y + TOPBAR_H + 8;
+  return 0;
+}
+function bottomDockPad() {
+  return MINI_SAFE_BOTTOM;
+}
+function gamebarHeight() {
+  return H - gamebarTop();
+}
+function gamebarTop() {
+  return uy(1742);
 }
 function sceneHeight() {
-  const widthHeight = Math.floor(CONTENT_W * 9 / 16);
-  const available = H - sceneTop() - 160;
-  return Math.max(150, Math.min(widthHeight, available));
+  return Math.max(260, uy(1742));
 }
 function drawRect(x, y, w, h, color, stroke) {
   ctx.fillStyle = color;
@@ -724,6 +1208,26 @@ function fitText(text, maxWidth, size) {
 function drawFittedText(text, x, y, size, color, align, maxWidth) {
   drawText(fitText(text, maxWidth, size), x, y, size, color, align);
 }
+function ux(value) {
+  return value / DESIGN_W * W;
+}
+function uy(value) {
+  return value / DESIGN_H * H;
+}
+function us(value) {
+  return value * Math.min(W / DESIGN_W, H / DESIGN_H);
+}
+function drawLayoutAsset(name, x, y, w, h) {
+  return drawAsset('ui_layout_' + name, ux(x), uy(y), ux(w), uy(h));
+}
+function addLayoutTarget(id, x, y, w, h, data) {
+  addTarget(id, ux(x), uy(y), ux(w), uy(h), data);
+}
+function drawPixelPanel(x, y, w, h, fill, stroke, hi) {
+  drawRect(x, y, w, h, stroke || '#201614');
+  drawRect(x + 3, y + 3, w - 6, h - 6, fill || '#6b3f2a');
+  if (hi) drawRect(x + 6, y + 6, w - 12, 4, hi);
+}
 function registerAsset(key, path) {
   ASSET_PATHS[key] = path;
 }
@@ -736,6 +1240,7 @@ function registerAssets() {
   PETS.forEach((pet) => registerAsset('pet_' + pet.id, `assets/icons/pet_${pet.id}.png`));
   ACCESSORIES.forEach((acc) => registerAsset('accessory_' + acc.id, `assets/icons/accessory_${acc.id}.png`));
   ['shop', 'gacha', 'dex', 'rank', 'redeem', 'share'].forEach((name) => registerAsset('ui_' + name, `assets/icons/ui_${name}.png`));
+  UI_LAYOUT_ASSETS.forEach((name) => registerAsset('ui_layout_' + name, `assets/ui_layout/${name}.png`));
   registerAsset('character_fishing_master', 'assets/icons/character_fishing_master.png');
   registerAsset('character_phoebe_cupid', 'assets/characters/phoebe-cupid-sprite.png');
   registerAsset('character_raiden_shogun', 'assets/characters/raiden-shogun-sprite.png');
@@ -803,26 +1308,109 @@ function drawOriginalButton(id, icon, label, x, y, w, h, active, data, variant) 
   addTarget(id, x, y, w, h, data);
 }
 function drawTopbar() {
-  drawRect(CONTENT_X, TOPBAR_Y, CONTENT_W, TOPBAR_H, '#1a1a2e', '#ffd700');
-  const userY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H / 2;
+  drawMainHud();
+}
+function drawResourcePill(x, y, value, iconColor) {
+  const px = ux(x);
+  const py = uy(y);
+  const pw = ux(282);
+  const ph = uy(64);
+  drawPixelPanel(px + ux(18), py + uy(2), pw - ux(40), ph - uy(2), '#7b4a33', '#2a1b19', '#c58b49');
+  drawRect(px + ux(14), py + uy(12), ux(42), uy(42), iconColor, '#5a341d');
+  drawText(iconColor === '#f8c247' ? '金' : '珠', px + ux(35), py + uy(33), us(18), '#5a341d', 'center');
+  drawFittedText(String(value), px + ux(74), py + uy(33), us(28), '#fff1a8', 'left', ux(146));
+  drawRect(px + ux(220), py, ux(64), uy(64), '#5dbd53', '#1d5d2a');
+  drawText('+', px + ux(252), py + uy(32), us(32), '#f6ffd5', 'center');
+  addLayoutTarget('top:shop', x + 220, y, 64, 64);
+}
+function drawProfilePanel() {
+  const x = ux(40);
+  const y = uy(40);
+  drawPixelPanel(x, y, ux(374), uy(172), '#6b3f2a', '#2a1b19', '#d29a5a');
+  drawRect(x + ux(12), y + uy(12), ux(128), uy(128), '#2e6b95', '#221a18');
+  drawCharacterSprite(user.activeCharacter || 'fishing_master', x + ux(23), y + uy(18), ux(106), uy(112));
+  drawPixelPanel(x + ux(150), y + uy(18), ux(250), uy(54), '#4a2d29', '#261817', '#c58b49');
+  drawFittedText(user.username, x + ux(170), y + uy(45), us(22), '#f6f0b8', 'left', ux(204));
+  drawPixelPanel(x + ux(150), y + uy(80), ux(250), uy(52), '#4a2d29', '#261817', '#c58b49');
+  drawFittedText(`UID:${user.username.slice(-10)}`, x + ux(170), y + uy(106), us(20), '#ffffff', 'left', ux(204));
+  const level = Math.max(1, Math.floor((user.stats.totalCatches || 0) / 5) + 1);
+  const exp = ((user.stats.totalCatches || 0) % 5) / 5;
+  drawPixelPanel(x + ux(10), y + uy(136), ux(350), uy(38), '#2b4d73', '#22303c', '#7fb6d9');
+  drawText(`LV.${level}`, x + ux(74), y + uy(155), us(22), '#ffffff', 'center');
+  drawRect(x + ux(154), y + uy(148), ux(214), uy(13), '#1d2e44', '#0e1725');
+  drawRect(x + ux(154), y + uy(148), ux(214 * exp), uy(13), '#f08c35');
+}
+function drawMenuAsset(key, id, x, y, w, h, data) {
+  if (!drawLayoutAsset(key, x, y, w, h)) {
+    drawPixelPanel(ux(x), uy(y), ux(w), uy(h), '#7b4a33', '#2a1b19', '#d29a5a');
+  }
+  addLayoutTarget(id, x, y, w, h, data);
+}
+function drawMainHud() {
+  drawProfilePanel();
+  drawResourcePill(758, 62, user.money, '#f8c247');
+  drawResourcePill(758, 149, user.diamonds, '#f4f2e9');
+  drawMenuAsset('menu_bag', 'top:shop', 43, 311, 114, 130, { tab: 'bait' });
+  drawMenuAsset('menu_shop', 'top:shop', 40, 470, 124, 128, { tab: 'bait' });
+  drawMenuAsset('menu_rank', 'top:rank', 41, 629, 117, 129);
+  drawMenuAsset('menu_task', 'top:task', 42, 790, 113, 123);
+  drawMenuAsset('menu_dex', 'top:dex', 45, 949, 107, 126);
+  drawMenuAsset('menu_more', 'top:weather', 48, 1112, 103, 79);
+  drawMenuAsset('menu_collection', 'top:dex', 846, 309, 186, 153);
+  drawMenuAsset('menu_idle', 'toggleauto', 864, 499, 151, 143);
+  const counts = dailyGoalCounts();
+  if (counts.claimable) {
+    drawRect(ux(132), uy(782), ux(38), uy(38), '#d82f2f', '#fff1a8');
+    drawText(String(counts.claimable), ux(151), uy(801), us(22), '#ffffff', 'center');
+  }
+  if (user.vipAuto) {
+    drawRect(ux(850), uy(482), ux(184), uy(32), '#1f8f53', '#fff1a8');
+    drawText('挂机中', ux(942), uy(498), us(19), '#ffffff', 'center');
+  }
+}
+function drawPsdSceneOverlays() {
   const env = environmentEffects();
-  drawText(user.username, CONTENT_X + TOPBAR_PAD_X, userY, 14, '#4ec9b0');
-  drawText(`💰 ${user.money}`, CONTENT_X + Math.min(112, CONTENT_W * .28), userY, 14, '#ffd700');
-  drawText(`次数 ${user.chances.left}/${user.chances.max}`, CONTENT_X + Math.min(205, CONTENT_W * .52), userY, 14, '#66e6ff');
-  drawFittedText(`${env.season.icon}${env.weather.icon} ${env.weather.name}`, CONTENT_X + CONTENT_W - TOPBAR_PAD_X, userY, 12, '#d8c98a', 'right', CONTENT_W * .32);
-  const actionY = TOPBAR_Y + TOPBAR_PAD_Y + USER_ROW_H + 6;
-  const bw = Math.floor((CONTENT_W - TOPBAR_PAD_X * 2 - ACTION_GAP * (ACTION_COLS - 1)) / ACTION_COLS);
-  TOP_BUTTONS.forEach((btn, i) => {
-    const row = Math.floor(i / ACTION_COLS);
-    const col = i % ACTION_COLS;
-    const label = btn[1];
-    const active = modal && modal.type === btn[0];
-    const x = CONTENT_X + TOPBAR_PAD_X + col * (bw + ACTION_GAP);
-    const y = actionY + row * (ACTION_H + ACTION_GAP);
-    drawOriginalButton('top:' + btn[0], TOP_EMOJI[btn[0]], label, x, y, bw, ACTION_H, active, null, '');
-  });
+  const overlayBottom = uy(1994);
+  if (env.weather.id === 'rain' || env.weather.id === 'storm') {
+    ctx.strokeStyle = env.weather.id === 'storm' ? 'rgba(210,235,255,.72)' : 'rgba(225,245,255,.50)';
+    ctx.lineWidth = Math.max(1, us(2));
+    for (let i = 0; i < 42; i += 1) {
+      const rx = (i * 43 + Date.now() / 18) % W;
+      const ry = (uy(230) + i * 67 + Date.now() / 12) % overlayBottom;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx - ux(16), ry + uy(34));
+      ctx.stroke();
+    }
+  } else if (env.weather.id === 'snow') {
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    for (let i = 0; i < 30; i += 1) {
+      const sx = (i * 59 + Date.now() / 45) % W;
+      const sy = (uy(240) + i * 47 + Date.now() / 32) % overlayBottom;
+      ctx.fillRect(sx, sy, Math.max(2, ux(5)), Math.max(2, uy(5)));
+    }
+  } else if (env.weather.id === 'fog') {
+    drawRect(ux(32), uy(760), ux(1016), uy(72), 'rgba(230,236,238,.22)');
+    drawRect(ux(80), uy(1160), ux(900), uy(58), 'rgba(230,236,238,.18)');
+  }
+  const rodTipX = ux(760);
+  const rodTipY = uy(1134);
+  const hookX = state.phase === 'idle' ? ux(622) : state.hookX;
+  const hookY = state.phase === 'idle' ? uy(1284) : state.hookY;
+  ctx.strokeStyle = '#dff6ff';
+  ctx.lineWidth = Math.max(1, us(2));
+  ctx.beginPath();
+  ctx.moveTo(rodTipX, rodTipY);
+  ctx.lineTo(hookX, hookY);
+  ctx.stroke();
+  drawRect(hookX - ux(6), hookY - uy(10) + Math.sin(Date.now() / 180) * uy(4), ux(12), uy(18), '#ff5722', '#5b2a15');
+  if (state.phase === 'hooked') drawLayoutAsset('event_alert', 862, 902, 156, 168);
 }
 function drawScene() {
+  if (drawAsset('ui_layout_scene', 0, 0, W, H)) {
+    drawPsdSceneOverlays();
+    return;
+  }
   const top = sceneTop();
   const h = sceneHeight();
   const env = environmentEffects();
@@ -917,35 +1505,45 @@ function drawScene() {
   }
 }
 function drawGamebar() {
-  const y = sceneTop() + sceneHeight() + 12;
-  drawRect(CONTENT_X, y, CONTENT_W, 110, '#1a1a2e', '#ffd700');
   const bait = BAITS[user.currentBait];
-  const rowY = y + 30;
-  const selectW = Math.min(150, Math.max(126, CONTENT_W * .25));
-  const selectX = W / 2 - selectW / 2;
-  drawText('当前鱼饵:', selectX - 16, rowY, 14, '#e8e8e8', 'right');
-  drawRect(selectX, rowY - 20, selectW, 40, '#2c3e50', '#ffd700');
-  drawAsset('bait_' + user.currentBait, selectX + 10, rowY - 14, 28, 28);
-  drawFittedText(`${bait.name} (×${user.baits[user.currentBait] || 0})`, selectX + 46, rowY, 13, '#ffd700', 'left', selectW - 64);
-  drawText('⌄', selectX + selectW - 14, rowY, 13, '#e8e8e8', 'center');
-  drawText(`剩余 ${user.baits[user.currentBait] || 0} 个`, selectX + selectW + 28, rowY, 14, '#e8e8e8', 'left');
-  addTarget('baitprev', selectX, rowY - 20, selectW / 2, 40);
-  addTarget('baitnext', selectX + selectW / 2, rowY - 20, selectW / 2, 40);
   const rod = activeRod();
-  const upcoming = nextRod();
-  const dexCount = Object.keys(user.dex).length;
   const env = environmentEffects();
-  const rodLine = upcoming
-    ? `鱼竿 ${rod.name} · 下一把 ${upcoming.name} (${dexCount}/${upcoming.threshold}) · ${user.province}榜最佳 ${user.ranking.bestScore || 0}`
-    : `鱼竿 ${rod.name} · ${env.weather.name}${env.weather.desc} · ${user.province}榜最佳 ${user.ranking.bestScore || 0}`;
-  drawFittedText(rodLine, W / 2, y + 67, 12, '#d8c98a', 'center', CONTENT_W - 42);
-  drawFittedText(status, W / 2, y + 91, 13, '#4ec9b0', 'center', CONTENT_W - 36);
+  drawLayoutAsset('control_meter', 312, 1742, 244, 220);
+  drawLayoutAsset('base', -1, 1994, 1082, 341);
+  if (!drawLayoutAsset('button_cast', 448, 1786, 380, 165)) {
+    drawPixelPanel(ux(448), uy(1786), ux(380), uy(165), '#ffd64d', '#4c2a1d', '#fff0a8');
+    drawText(mobileActionLabel(), ux(638), uy(1868), us(64), '#332523', 'center');
+  }
+  if (state.phase !== 'idle') {
+    drawRect(ux(560), uy(1812), ux(250), uy(112), 'rgba(255,214,77,.72)');
+    drawText(mobileActionLabel(), ux(688), uy(1868), us(46), '#332523', 'center');
+  }
+  addLayoutTarget('mobile-action', 448, 1786, 380, 165);
+  if (!drawLayoutAsset('button_bait', 114, 1945, 150, 167)) {
+    drawPixelPanel(ux(114), uy(1945), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
+  }
+  addLayoutTarget('baitnext', 88, 1918, 210, 220);
+  if (!drawLayoutAsset('button_tackle', 895, 1773, 150, 174)) {
+    drawPixelPanel(ux(895), uy(1773), ux(150), uy(174), '#7b4a33', '#2a1b19', '#d29a5a');
+  }
+  addLayoutTarget('rodnext', 850, 1746, 215, 230);
+  drawLayoutAsset('rod_current', 345, 2016, 623, 89);
+  drawAsset('bait_' + user.currentBait, ux(136), uy(1962), ux(76), uy(76));
+  drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
+  drawAsset('rod_' + rod.id, ux(802), uy(1998), ux(72), uy(72));
+  drawFittedText(rod.name, ux(834), uy(1980), us(24), '#fff1a8', 'center', ux(206));
+  drawRect(ux(224), uy(1632), ux(632), uy(58), 'rgba(28,31,45,.78)', '#fff1a8');
+  drawFittedText(`${env.season.name}${env.weather.name} · ${status}`, W / 2, uy(1661), us(23), '#e9ffd5', 'center', ux(586));
+  const rankBrief = rankScope === 'provinceWar'
+    ? `${user.province}队 ${user.ranking.todayScore || 0}分`
+    : `${rankLabel(rankScope)} ${user.ranking.bestScore || 0}`;
+  drawFittedText(`次数 ${user.chances.left}/${user.chances.max} · ${rankBrief}`, ux(540), uy(2146), us(22), '#cbd5e1', 'center', ux(520));
 }
 function drawHitbar() {
   if (!hb.active) return;
   const top = Math.max(MINI_SAFE_TOP + 96, Math.min(H * .38, H - 310));
   drawRect(18, top, W - 36, 146, 'rgba(0,0,0,.72)', '#ffd700');
-  drawText(`${RARITY_NAME[hb.catch.rarity]}级鱼上钩了！连续命中红区 ${hb.need} 次`, W / 2, top + 28, 16, '#ffffff', 'center');
+  drawText(`${RARITY_NAME[hb.catch.rarity]}级鱼上钩了！点击下方按钮命中红区 ${hb.need} 次`, W / 2, top + 28, 16, '#ffffff', 'center');
   drawText(`${hb.hits} / ${hb.need} 命中    ${hb.time.toFixed(1)}s`, W / 2, top + 55, 14, '#6be7ff', 'center');
   const bx = 40;
   const by = top + 84;
@@ -953,21 +1551,6 @@ function drawHitbar() {
   drawRect(bx, by, bw, 28, '#26384c', '#ffd700');
   drawRect(bx + bw * hb.zone, by, bw * hb.width, 28, '#d35400');
   drawRect(bx + bw * hb.cursor - 2, by - 4, 4, 36, '#ffffff');
-  const size = Math.min(116, Math.max(94, Math.floor(W * .28)));
-  const cx = W / 2;
-  const cy = H - size / 2 - 24;
-  const gradient = ctx.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
-  gradient.addColorStop(0, '#c0392b');
-  gradient.addColorStop(1, '#ff6f00');
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#ffd700';
-  ctx.lineWidth = 4;
-  ctx.stroke();
-  drawText('击中!', cx, cy, 20, '#ffffff', 'center');
-  addTarget('hit', cx - size / 2, cy - size / 2, size, size);
 }
 function mobileActionLabel() {
   if (state.phase === 'idle') return '抛竿';
@@ -976,23 +1559,7 @@ function mobileActionLabel() {
   return '击中!';
 }
 function drawMobileAction() {
-  if (modal || hb.active) return;
-  const size = Math.min(118, Math.max(92, Math.floor(W * .28)));
-  const x = W / 2;
-  const y = H - size / 2 - 24;
-  const active = state.phase === 'hooked' || state.phase === 'reeling';
-  const gradient = ctx.createLinearGradient(x - size / 2, y - size / 2, x + size / 2, y + size / 2);
-  gradient.addColorStop(0, active ? '#c0392b' : '#d35400');
-  gradient.addColorStop(1, active ? '#e74c3c' : '#ff6f00');
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#ffd700';
-  ctx.lineWidth = 4;
-  ctx.stroke();
-  drawText(mobileActionLabel(), x, y, 20, '#ffffff', 'center');
-  addTarget('mobile-action', x - size / 2, y - size / 2, size, size);
+  return;
 }
 function drawModal() {
   if (!modal) return;
@@ -1008,13 +1575,14 @@ function drawModal() {
   drawRect(18, modalTop, W - 36, H - modalTop - 36, '#191a2f', '#ffd700');
   drawButton('modal:close', '×', W - 58, modalTop + 12, 30, 30, false);
   const titleMap = {
-    shop: '鱼饵商店',
-    dex: '钓鱼图鉴',
+    shop: '商店',
+    dex: '图鉴',
     rod: '鱼竿收藏',
     character: '角色',
     accessory: '首饰',
     pet: '宠物',
     rank: '排行榜',
+    task: '今日任务',
     gacha: '幸运抽奖',
     redeem: '兑换码',
     share: '分享',
@@ -1029,6 +1597,7 @@ function drawModal() {
   else if (modal.type === 'pet') drawPetModal();
   else if (modal.type === 'accessory') drawAccessoryModal();
   else if (modal.type === 'rank') drawRankModal();
+  else if (modal.type === 'task') drawTaskModal();
   else if (modal.type === 'weather') drawWeatherModal();
   else if (modal.type === 'gacha') drawGachaModal();
   else if (modal.type === 'redeem') drawRedeemModal();
@@ -1081,33 +1650,79 @@ function drawFishPixelIcon(x, y, item, unlocked) {
   drawRect(x - 8, y - 20, 14, 7, dark);
   drawRect(x - 8, y + 13, 14, 7, dark);
 }
+function drawMerchantPixel(x, y) {
+  drawRect(x + 12, y + 4, 46, 10, '#7c3f18', '#3d1f0f');
+  drawRect(x + 18, y + 14, 34, 26, '#f0b37e', '#5c2d16');
+  drawRect(x + 10, y + 20, 50, 10, '#8b4513');
+  drawRect(x + 22, y + 23, 6, 5, '#101010');
+  drawRect(x + 42, y + 23, 6, 5, '#101010');
+  drawRect(x + 30, y + 31, 10, 4, '#7c2d12');
+  drawRect(x + 16, y + 40, 38, 32, '#2563eb', '#facc15');
+  drawRect(x + 8, y + 44, 10, 24, '#f0b37e', '#5c2d16');
+  drawRect(x + 52, y + 44, 10, 24, '#f0b37e', '#5c2d16');
+  drawRect(x + 24, y + 48, 22, 12, '#facc15', '#7c2d12');
+  drawText('商', x + 35, y + 55, 13, '#7c2d12', 'center');
+}
 function drawShopModal() {
-  let y = 136;
-  Object.entries(BAITS).forEach(([id, bait]) => {
-    drawListItem(34, y, W - 68, 58, '饵', `${bait.name} x${user.baits[id] || 0}`, `${bait.desc} · ${bait.currency === 'diamonds' ? '钻石' : '金币'} ${bait.price}`, bait.color, 'bait_' + id, 104);
-    drawButton('buybait', '买1', W - 132, y + 13, 42, 32, false, { id, count: 1 });
-    drawButton('buybaitn', '买N', W - 84, y + 13, 42, 32, false, { id });
-    y += 66;
-  });
+  drawRect(34, 126, W - 68, 78, '#0d1421', '#33344f');
+  drawMerchantPixel(48, 132);
+  drawText('码头商店', 126, 148, 17, '#ffd700');
+  drawFittedText('商人出售鱼饵和基础鱼竿，图鉴收集仍在“图鉴”入口查看。', 126, 174, 11, '#9aa6b2', 'left', W - 172);
+  drawButton('shoptab', '鱼饵', 40, 214, 82, 30, shopTab === 'bait', { tab: 'bait' });
+  drawButton('shoptab', '鱼竿', 130, 214, 82, 30, shopTab === 'rod', { tab: 'rod' });
+  let y = 256;
+  if (shopTab === 'bait') {
+    Object.entries(BAITS).forEach(([id, bait]) => {
+      const current = user.currentBait === id;
+      const currency = bait.currency === 'diamonds' ? '钻石' : '金币';
+      const label = `${bait.name} x${user.baits[id] || 0}${current ? ' · 使用中' : ''}`;
+      const desc = `${bait.desc} · ${currency} ${bait.price}/个 · ${baitRaritySummary(bait)}`;
+      drawListItem(34, y, W - 68, 58, '饵', label, desc, bait.color, 'bait_' + id, 104);
+      drawButton('buybait', '买1', W - 132, y + 13, 42, 32, false, { id, count: 1 });
+      drawButton('buybaitn', '买N', W - 84, y + 13, 42, 32, false, { id });
+      y += 64;
+    });
+  } else {
+    const dexCount = Object.keys(user.dex).length;
+    RODS.forEach((rod) => {
+      const owned = user.ownedRods.includes(rod.id);
+      const unlocked = dexCount >= rod.threshold;
+      const equipped = activeRod().id === rod.id;
+      const priceText = rod.price ? `${rod.price}金币` : '免费';
+      const desc = owned
+        ? (equipped ? '已装备' : '已拥有，点击装备')
+        : (unlocked ? `${rod.desc} · ${priceText}` : `图鉴 ${dexCount}/${rod.threshold} 解锁购买`);
+      drawListItem(34, y, W - 68, 50, rod.icon || '竿', rod.name, desc, rod.hi, 'rod_' + rod.id, unlocked ? 72 : 0);
+      if (unlocked) drawButton('buyrod', owned ? (equipped ? '已装备' : '装备') : '购买', W - 106, y + 10, 62, 30, !owned || !equipped, { id: rod.id });
+      y += 58;
+    });
+  }
 }
 function drawDexModal() {
-  if (!BAITS[activeDexBait]) activeDexBait = BAIT_IDS[0];
-  const tabCols = 3;
-  const tabGap = 6;
+  if (!FISH_DEX_FILTERS.some(([id]) => id === activeFishDexFilter)) activeFishDexFilter = 'all';
+  const tabCols = FISH_DEX_FILTERS.length;
+  const tabGap = 4;
   const tabX = 34;
   const tabY = 126;
   const tabW = Math.floor((W - 68 - tabGap * (tabCols - 1)) / tabCols);
   const tabH = 30;
-  BAIT_IDS.forEach((id, i) => {
+  FISH_DEX_FILTERS.forEach(([id, label], i) => {
     const x = tabX + (i % tabCols) * (tabW + tabGap);
-    const y = tabY + Math.floor(i / tabCols) * (tabH + 6);
-    drawButton('dextab', BAITS[id].name, x, y, tabW, tabH, activeDexBait === id, { id }, 'bait_' + id);
+    drawButton('fishdextab', label, x, tabY, tabW, tabH, activeFishDexFilter === id, { id });
   });
-  const bait = BAITS[activeDexBait];
-  const items = bait.fishes;
-  const unlocked = items.filter((item) => user.dex[item.id]).length;
-  const gridTop = tabY + Math.ceil(BAIT_IDS.length / tabCols) * (tabH + 6) + 10;
+  const allItems = allFishDexItems();
+  const filteredItems = activeFishDexFilter === 'all'
+    ? allItems
+    : allItems.filter((item) => item.rarity === activeFishDexFilter);
   const cols = 3;
+  const gridTop = tabY + tabH + 14;
+  const rows = Math.max(2, Math.floor((H - gridTop - 116) / 76));
+  const pageSize = Math.max(cols * rows, cols * 2);
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  fishDexPage = Math.max(0, Math.min(fishDexPage, pageCount - 1));
+  const items = filteredItems.slice(fishDexPage * pageSize, fishDexPage * pageSize + pageSize);
+  const unlockedTotal = allItems.filter((item) => user.dex[item.id]).length;
+  const unlockedFiltered = filteredItems.filter((item) => user.dex[item.id]).length;
   const colW = (W - 84) / cols;
   items.forEach((item, i) => {
     const x = 34 + (i % cols) * (colW + 8);
@@ -1117,12 +1732,20 @@ function drawDexModal() {
     drawRect(x, y, colW, 68, '#0d1421', border);
     drawFishPixelIcon(x + colW / 2, y + 23, item, !!found);
     drawFittedText(found ? item.name : '???', x + colW / 2, y + 49, 11, found ? '#e8e8e8' : '#777777', 'center', colW - 8);
-    drawFittedText(found ? `x${found.count} | 最大 ${found.maxWeight}kg` : RARITY_NAME[item.rarity], x + colW / 2, y + 61, 9, found ? RARITY_COLOR[item.rarity] : '#777777', 'center', colW - 8);
+    const foundDesc = `${baitNamesForFish(item)} · x${found && found.count || 0}`;
+    drawFittedText(found ? foundDesc : RARITY_NAME[item.rarity], x + colW / 2, y + 61, 9, found ? RARITY_COLOR[item.rarity] : '#777777', 'center', colW - 8);
   });
-  const statsY = Math.min(H - 86, gridTop + Math.ceil(items.length / cols) * 76 + 8);
-  drawRect(34, statsY, W - 68, 48, '#0d1421', '#555555');
-  drawText(`${bait.name}图鉴：${unlocked} / ${items.length}`, 46, statsY + 15, 13, bait.color || '#ffd700');
-  drawFittedText(`累计钓获 ${user.stats.totalCatches || 0} 次 · 收入 ${user.stats.totalEarned || 0} 金币 · 钻石 ${user.stats.totalDiamonds || 0}`, 46, statsY + 34, 11, '#9aa6b2', 'left', W - 92);
+  const gridRows = Math.max(1, Math.ceil(items.length / cols));
+  const statsY = Math.min(H - 92, gridTop + gridRows * 76 + 8);
+  drawRect(34, statsY, W - 68, 58, '#0d1421', '#555555');
+  const filterName = FISH_DEX_FILTERS.find(([id]) => id === activeFishDexFilter)[1];
+  drawText(`鱼类图鉴：${unlockedTotal} / ${allItems.length}`, 46, statsY + 16, 13, '#ffd700');
+  drawFittedText(`${filterName} ${unlockedFiltered}/${filteredItems.length} · 累计钓获 ${user.stats.totalCatches || 0} 次 · 收入 ${user.stats.totalEarned || 0} 金币`, 46, statsY + 36, 11, '#9aa6b2', 'left', W - 92);
+  if (pageCount > 1) {
+    drawButton('fishdexprev', '上一页', 42, statsY + 68, 66, 28, false);
+    drawText(`${fishDexPage + 1}/${pageCount}`, W / 2, statsY + 82, 12, '#e8e8e8', 'center');
+    drawButton('fishdexnext', '下一页', W - 108, statsY + 68, 66, 28, false);
+  }
 }
 function drawRodModal() {
   const list = RODS.concat(GACHA_RODS.filter((rod) => user.ownedRods.includes(rod.id)));
@@ -1174,20 +1797,85 @@ function drawAccessoryModal() {
   });
 }
 function drawRankModal() {
-  drawRect(34, 126, W - 68, 82, '#0d1421', '#33344f');
-  drawText(`${user.province}省份榜`, 48, 148, 15, '#ffd700');
-  drawFittedText(`个人最佳 ${user.ranking.bestScore || 0} 分 · 今日累计 ${user.ranking.todayScore || 0} 分`, 48, 174, 12, '#9aa6b2', 'left', W - 96);
-  drawButton('provinceNext', '切换省份', W - 128, 142, 74, 30, false);
-  const rows = provinceRankRows();
-  rows.forEach((r, i) => {
-    const label = r.self ? `${r.name}（我）` : r.name;
-    const desc = r.self
-      ? `最佳鱼 ${user.ranking.bestFish || '暂无'} · 最大 ${user.ranking.bestWeight || 0}kg`
-      : `本周最佳 ${r.score} 分`;
-    drawListItem(34, 224 + i * 54, W - 68, 44, String(i + 1), label, desc, r.self ? '#ffd700' : '#ffffff', r.self ? 'ui_rank' : '');
+  const tabY = 126;
+  const tabW = Math.floor((W - 68 - 8) / RANK_SCOPES.length);
+  RANK_SCOPES.forEach(([scope, label], i) => {
+    drawButton('ranktab', label, 34 + i * (tabW + 4), tabY, tabW, 30, rankScope === scope, { scope });
   });
-  const ownRank = rows.findIndex((r) => r.self) + 1;
-  drawFittedText(`你当前排第 ${ownRank} 名，失败页和结果页会引导继续冲榜。`, W / 2, H - 70, 12, '#4ec9b0', 'center', W - 90);
+  const summary = rankSummary(rankScope);
+  if (rankScope === 'provinceWar') {
+    const ownTeam = summary.ownRow || { score: user.ranking.todayScore || 0, members: 1, todayCatches: 0 };
+    drawRect(34, 166, W - 68, 108, '#0d1421', '#ffd700');
+    drawText(`为 ${user.province}队 出战`, 48, 188, 16, '#ffd700');
+    drawFittedText(`省队第 ${summary.selfRank}/${summary.total} 名 · 超过 ${summary.beatPercent}% 省队`, 48, 212, 13, '#66e6ff', 'left', W - 96);
+    const gapText = summary.gap > 0
+      ? `距离上一省 ${summary.gap} 分，分享给朋友一起补分`
+      : '今天领先状态不错，继续拉开差距';
+    drawFittedText(`我今日贡献 ${user.ranking.todayScore || 0} 分 · 本省总分 ${ownTeam.score || 0} · ${gapText}`, 48, 236, 11, '#9aa6b2', 'left', W - 96);
+    drawButton('rankshare', '召集队友', W - 126, 184, 76, 30, true);
+    drawButton('provinceNext', '换省份', W - 126, 224, 76, 30, false);
+    const rows = summary.rows.slice(0, Math.max(4, Math.floor((H - 352) / 54)));
+    rows.forEach((r, i) => {
+      const medal = i === 0 ? '冠' : i === 1 ? '亚' : i === 2 ? '季' : String(i + 1);
+      const label = r.self ? `${r.province}队（我）` : `${r.province}队`;
+      const desc = `今日 ${r.score || 0} 分 · 队友 ${r.members || 0} 人 · 头名 ${r.bestPlayer || '暂无'} ${r.topScore || 0}分`;
+      drawListItem(34, 292 + i * 54, W - 68, 44, medal, label, desc, r.self ? '#ffd700' : '#ffffff', r.self ? 'ui_rank' : '');
+    });
+  } else {
+    if (rankScope === 'province') drawButton('provinceNext', '切换省份', W - 126, 166, 76, 30, false);
+    drawRect(34, 166, W - 68, 86, '#0d1421', '#33344f');
+    drawText(rankLabel(rankScope), 48, 188, 16, '#ffd700');
+    drawFittedText(`第 ${summary.selfRank}/${summary.total} 名 · 超过 ${summary.beatPercent}% 玩家`, 48, 213, 13, '#66e6ff', 'left', W - 96);
+    const gapText = summary.gap > 0
+      ? `再拿 ${summary.gap} 分可追上 ${summary.nextRow && summary.nextRow.name || '上一名'}`
+      : '当前排名表现稳定，继续钓鱼扩大优势';
+    drawFittedText(`个人最佳 ${user.ranking.bestScore || 0} 分 · 今日累计 ${user.ranking.todayScore || 0} 分 · ${gapText}`, 48, 236, 11, '#9aa6b2', 'left', W - 96);
+    const rows = summary.rows.slice(0, Math.max(4, Math.floor((H - 336) / 54)));
+    rows.forEach((r, i) => {
+      const label = r.self ? `${r.name}（我）` : r.name;
+      const desc = r.self
+        ? `最佳鱼 ${user.ranking.bestFish || '暂无'} · 最大 ${user.ranking.bestWeight || 0}kg`
+        : `${rankScope === 'national' ? (r.province || '未知') + ' · ' : ''}最佳 ${r.score} 分${r.bestFish ? ' · ' + r.bestFish : ''}`;
+      drawListItem(34, 270 + i * 54, W - 68, 44, String(i + 1), label, desc, r.self ? '#ffd700' : '#ffffff', r.self ? 'ui_rank' : '');
+    });
+  }
+  const rankHint = rankLoading
+    ? `正在加载云端${rankLabel(rankScope)}...`
+    : (backendReady ? `${rankLabel(rankScope)}已同步，结果页和失败页会显示当前排名。` : `${rankLabel(rankScope)}使用本地兜底显示。`);
+  drawFittedText(rankHint, W / 2, H - 70, 12, '#4ec9b0', 'center', W - 90);
+}
+function drawTaskModal() {
+  user.daily = ensureDaily(user.daily);
+  const counts = dailyGoalCounts();
+  drawRect(34, 126, W - 68, 86, '#0d1421', '#33344f');
+  drawText('轻量每日目标', 48, 150, 17, '#ffd700');
+  drawFittedText('完成钓鱼、天气和图鉴目标，领取金币后去商店补给。', 48, 177, 12, '#9aa6b2', 'left', W - 96);
+  drawFittedText(`今日完成 ${counts.completed}/${counts.total} · 已领 ${counts.claimed}/${counts.total} · 可领取 ${counts.claimable}`, 48, 198, 11, '#66e6ff', 'left', W - 96);
+  const rowH = H <= 640 ? 48 : 54;
+  const gap = 6;
+  const startY = 226;
+  DAILY_GOALS.forEach((goal, i) => {
+    const y = startY + i * (rowH + gap);
+    if (y + rowH > H - 82) return;
+    const progress = Math.min(goal.target, dailyGoalProgress(goal));
+    const ready = progress >= goal.target;
+    const claimed = dailyGoalClaimed(goal);
+    const color = claimed ? '#4ec9b0' : (ready ? '#ffd700' : '#ffffff');
+    const desc = `${goal.desc} · ${progress}/${goal.target} · 奖励 ${dailyGoalRewardText(goal)}`;
+    drawListItem(34, y, W - 68, rowH, goal.icon, goal.name, desc, color, '', 78);
+    const bx = W - 108;
+    const by = y + Math.max(7, (rowH - 30) / 2);
+    if (claimed) {
+      drawRect(bx, by, 64, 30, '#203647', '#4ec9b0');
+      drawText('已领', bx + 32, by + 15, 12, '#4ec9b0', 'center');
+    } else if (ready) {
+      drawButton('claimgoal', '领取', bx, by, 64, 30, true, { id: goal.id });
+    } else {
+      drawRect(bx, by, 64, 30, '#1f2937', '#4b5563');
+      drawText('未完成', bx + 32, by + 15, 11, '#9aa6b2', 'center');
+    }
+  });
+  drawFittedText('建议顺序：先看天气，再抛竿；鱼饵不足时进商店补货。', W / 2, H - 62, 12, '#4ec9b0', 'center', W - 90);
 }
 function drawWeatherModal() {
   const env = environmentEffects();
@@ -1251,7 +1939,7 @@ function drawFailureModal() {
   drawButton('modal:close', '×', x + cardW - 42, y + 10, 30, 30, false);
   drawText('差一点就钓到了', W / 2, y + 38, 20, '#ffcc66', 'center');
   drawFittedText(reasonText, W / 2, y + 72, 13, '#ffffff', 'center', cardW - 44);
-  drawFittedText(`${user.province}榜最佳 ${user.ranking.bestScore || 0} 分，再来一局冲排名`, W / 2, y + 102, 12, '#66e6ff', 'center', cardW - 44);
+  drawFittedText(rankSummaryText(rankScope), W / 2, y + 102, 12, '#66e6ff', 'center', cardW - 44);
   drawRect(x + 24, y + 124, cardW - 48, 42, '#10121f', '#33344f');
   drawText(`剩余次数 ${user.chances.left}/${user.chances.max}`, W / 2, y + 145, 15, '#4ec9b0', 'center');
   drawButton('shareChance', '分享+1次', x + 30, y + 184, 118, 36, true);
@@ -1273,7 +1961,7 @@ function drawResultModal() {
   drawText(c.item.name, W / 2, y + 92, 20, RARITY_COLOR[c.rarity], 'center');
   drawText(`${RARITY_NAME[c.rarity]} ${c.weight ? c.weight + 'kg' : ''}`, W / 2, y + 122, 14, '#ffffff', 'center');
   drawText(`获得 ${c.value ? c.value + '金币' : ''}${c.diamondValue ? c.diamondValue + '钻石' : ''} · ${score}分`, W / 2, y + 148, 14, '#ffd700', 'center');
-  drawFittedText(`${user.province}榜最佳 ${user.ranking.bestScore || 0} 分`, W / 2, y + 173, 12, '#66e6ff', 'center', cardW - 40);
+  drawFittedText(rankSummaryText(rankScope), W / 2, y + 173, 12, '#66e6ff', 'center', cardW - 40);
   drawButton('resultShare', '分享战绩', x + 24, y + cardH - 46, 86, 30, true);
   drawButton('openrank', '看排行', x + cardW / 2 - 43, y + cardH - 46, 86, 30, false);
   drawButton('modal:close', '继续钓', x + cardW - 110, y + cardH - 46, 86, 30, true);
@@ -1281,9 +1969,9 @@ function drawResultModal() {
 function render() {
   targets = [];
   drawRect(0, 0, W, H, '#020407');
-  drawTopbar();
   drawScene();
   drawGamebar();
+  drawTopbar();
   drawMobileAction();
   drawHitbar();
   drawModal();
@@ -1352,17 +2040,31 @@ function handleAction(t) {
       saveUser();
     } else {
       modal = { type };
-      if (type === 'dex' && BAITS[user.currentBait]) activeDexBait = user.currentBait;
+      if (type === 'dex') {
+        activeFishDexFilter = 'all';
+        fishDexPage = 0;
+        markDailyFlag('dexSeen');
+      }
+      if (type === 'shop') shopTab = t.data && t.data.tab === 'rod' ? 'rod' : 'bait';
       if (type === 'gacha') {
         gachaTab = 'coins';
         gachaSeason = 1;
       }
+      if (type === 'weather') markDailyFlag('weatherSeen');
+      if (type === 'rank') loadRank(rankScope);
     }
     return;
   }
   if (t.id === 'cast') cast();
   else if (t.id === 'baitprev') changeBait(-1);
   else if (t.id === 'baitnext') changeBait(1);
+  else if (t.id === 'rodprev') changeRod(-1);
+  else if (t.id === 'rodnext') changeRod(1);
+  else if (t.id === 'toggleauto') {
+    user.vipAuto = !user.vipAuto;
+    status = user.vipAuto ? '挂机钓鱼已开启' : '挂机钓鱼已关闭';
+    saveUser();
+  }
   else if (t.id === 'mobile-action') {
     if (state.phase === 'idle') cast();
     else if (state.phase === 'hooked') startHitbar();
@@ -1370,10 +2072,25 @@ function handleAction(t) {
   }
   else if (t.id === 'hit') hitbarClick();
   else if (t.id === 'modal:close') modal = null;
-  else if (t.id === 'openrank') modal = { type: 'rank' };
-  else if (t.id === 'dextab') activeDexBait = t.data.id;
+  else if (t.id === 'openrank') {
+    modal = { type: 'rank' };
+    loadRank(rankScope);
+  }
+  else if (t.id === 'ranktab') {
+    rankScope = t.data.scope === 'national' ? 'national' : t.data.scope === 'province' ? 'province' : 'provinceWar';
+    loadRank(rankScope);
+  }
+  else if (t.id === 'fishdextab') {
+    activeFishDexFilter = t.data.id;
+    fishDexPage = 0;
+  }
+  else if (t.id === 'fishdexprev') fishDexPage = Math.max(0, fishDexPage - 1);
+  else if (t.id === 'fishdexnext') fishDexPage += 1;
+  else if (t.id === 'shoptab') shopTab = t.data.tab === 'rod' ? 'rod' : 'bait';
   else if (t.id === 'buybait') buyBait(t.data.id, t.data.count);
   else if (t.id === 'buybaitn') askBuyBaitCount(t.data.id);
+  else if (t.id === 'buyrod') buyRod(t.data.id);
+  else if (t.id === 'claimgoal') claimDailyGoal(t.data.id);
   else if (t.id === 'equiprod') {
     user.rodSkin = t.data.id;
     saveUser();
@@ -1396,18 +2113,7 @@ function handleAction(t) {
   } else if (t.id === 'gacha') {
     doGacha(t.data.count);
   } else if (t.id === 'redeemcode') {
-    const code = t.data.code;
-    const usedKey = `redeem_${code}`;
-    if (wx.getStorageSync(usedKey)) {
-      status = '该兑换码已使用';
-    } else {
-      if (code === 'WAKAKA666') user.diamonds += 10000;
-      else if (code === 'WELCOME2024') user.money += 500;
-      else user.money += 200;
-      wx.setStorageSync(usedKey, true);
-      status = '兑换成功';
-      saveUser();
-    }
+    redeemCode(t.data.code);
   } else if (t.id === 'sharecopy') {
     wx.setClipboardData({ data: '像素钓鱼小游戏，快来一起钓鱼！' });
     const today = new Date().toDateString();
@@ -1418,7 +2124,7 @@ function handleAction(t) {
     }
     status = '分享口令已复制';
   } else if (t.id === 'shareChance') {
-    wx.setClipboardData({ data: `我在${user.province}榜钓到了 ${user.ranking.bestScore || 0} 分，来挑战我的钓鱼纪录！` });
+    wx.setClipboardData({ data: `我正在为${user.province}队冲榜，${rankSummaryText('provinceWar')}，快来帮本省加一分！` });
     if (user.chances.shareGrants >= 3) {
       status = '今日分享补次数已达上限，可用金币补次数或明天再来';
     } else {
@@ -1436,13 +2142,19 @@ function handleAction(t) {
     }
   } else if (t.id === 'resultShare') {
     const score = modal && modal.catch ? catchScore(modal.catch) : (user.ranking.bestScore || 0);
-    wx.setClipboardData({ data: `我在像素钓鱼拿到 ${score} 分，${user.province}榜等你来挑战！` });
+    wx.setClipboardData({ data: `我刚为${user.province}队贡献 ${score} 分，${rankSummaryText('provinceWar')}，等你来一起冲榜！` });
     status = '战绩口令已复制';
+  } else if (t.id === 'rankshare') {
+    wx.setClipboardData({ data: `今天加入${user.province}队钓鱼冲榜，${rankSummaryText('provinceWar')}，快来一起给本省上分！` });
+    status = '省队召集口令已复制';
   } else if (t.id === 'provinceNext') {
     const idx = Math.max(0, PROVINCES.indexOf(user.province));
     user.province = PROVINCES[(idx + 1) % PROVINCES.length];
-    status = `已切换到${user.province}省份榜`;
+    status = `已切换为${user.province}队出战`;
+    rankCache.province = null;
+    rankCache.provinceWar = null;
     saveUser();
+    loadRank(rankScope);
   }
 }
 wx.onTouchEnd((event) => {
@@ -1451,5 +2163,7 @@ wx.onTouchEnd((event) => {
 });
 wx.onShow(() => {
   user = loadUser();
+  syncBackendUser();
 });
+syncBackendUser();
 loop();

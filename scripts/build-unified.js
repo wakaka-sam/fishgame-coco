@@ -23,6 +23,10 @@ if (!fs.existsSync(runtimeGame)) {
 }
 
 fs.mkdirSync(wechatDir, { recursive: true });
+const uiLayoutAssets = path.join(root, 'assets', 'ui_layout');
+if (fs.existsSync(uiLayoutAssets)) {
+  copyDir(uiLayoutAssets, path.join(wechatDir, 'assets', 'ui_layout'));
+}
 fs.copyFileSync(runtimeGame, path.join(wechatDir, 'game.js'));
 
 fs.rmSync(webDir, { recursive: true, force: true });
