@@ -1,0 +1,19 @@
+[Unit]
+Description=Fish Coco API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/fish-coco-api
+Environment=FISH_COCO_API_HOST=127.0.0.1
+Environment=FISH_COCO_API_PORT=8088
+Environment=FISH_COCO_STORE_PATH=/var/lib/fish-coco-api/store.json
+ExecStart=/usr/bin/python3 /opt/fish-coco-api/fishapi_server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

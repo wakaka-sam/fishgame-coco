@@ -10,6 +10,7 @@ const types = {
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.wav': 'audio/wav',
   '.json': 'application/json; charset=utf-8'
 };
 

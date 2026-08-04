@@ -37,6 +37,23 @@ Open `http://localhost:4173`.
 
 When changing Web UI behavior, compare against `/Volumes/bigger/testspace/fishing-game` and keep the art style, top tabs, button placement, dialogs, and game interactions consistent with the original project.
 
+## Deployment Topology
+
+- Frontend service: deploy to `fish.wakaka007.cn` on the current server.
+- Backend service: deploy to `fishapi.wakaka007.cn` on the `gz` server.
+- Backend API rule: backend services must use `POST` methods only. Do not add or rely on `GET` methods for backend endpoints.
+- Current backend implementation: `backend/fishapi_server.py`, deployed as a Python stdlib service behind Caddy on `gz`.
+- Current backend data file: `/var/lib/fish-coco-api/store.json` on `gz`.
+- Browser-facing frontend calls use same-origin `/api/...` on `fish.wakaka007.cn`; the frontend Caddy proxies those requests to the `gz` backend. This avoids browser mixed-content/CORS issues while keeping the backend deployed on `fishapi.wakaka007.cn`.
+- Current backend POST endpoints:
+  - `/api/ping`
+  - `/api/login`
+  - `/api/save`
+  - `/api/leaderboard`
+  - `/api/rank-history`
+  - `/api/redeem`
+  - `/api/gacha`
+
 ## WeChat Mini Game
 
 The WeChat Mini Game source is in:

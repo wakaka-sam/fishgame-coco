@@ -1,0 +1,15 @@
+fish.wakaka007.cn {
+	@api path /api/*
+	reverse_proxy @api http://119.91.206.88 {
+		header_up Host fishapi.wakaka007.cn
+	}
+
+	root * /opt/fishgame-coco/build/web-cocos
+	encode gzip
+	file_server
+}
+
+monitor.wakaka007.cn {
+	encode gzip
+	reverse_proxy 127.0.0.1:9108
+}

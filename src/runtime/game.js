@@ -13,6 +13,25 @@ const DESIGN_H = 2334;
 const SAVE_KEY = 'fish-coco-wechatgame-save';
 const PLAYER_ID_KEY = 'fish-coco-player-id';
 const API_BASE = typeof window === 'undefined' ? 'https://fish.wakaka007.cn' : '';
+const BGM_PATH = 'assets/audio/fishing_lake_loop.wav';
+const BGM_VOLUME = 0.42;
+const SFX_VOLUME = 0.68;
+const SFX_PATHS = {
+  uiClick: 'assets/audio/sfx_ui_click.wav',
+  panelOpen: 'assets/audio/sfx_panel_open.wav',
+  panelClose: 'assets/audio/sfx_panel_close.wav',
+  switch: 'assets/audio/sfx_switch.wav',
+  cast: 'assets/audio/sfx_cast.wav',
+  bite: 'assets/audio/sfx_bite.wav',
+  hit: 'assets/audio/sfx_hit.wav',
+  catchSuccess: 'assets/audio/sfx_catch_success.wav',
+  fail: 'assets/audio/sfx_fail.wav',
+  buy: 'assets/audio/sfx_buy.wav',
+  reward: 'assets/audio/sfx_reward.wav',
+  share: 'assets/audio/sfx_share.wav',
+  toggle: 'assets/audio/sfx_toggle.wav',
+  error: 'assets/audio/sfx_error.wav',
+};
 const MINI_SAFE_TOP = Math.max(
   0,
   sys.statusBarHeight || 0,
@@ -37,6 +56,206 @@ const USER_ROW_H = 26;
 const LIGHT_TOP_BUTTON_COUNT = 5;
 const ACTION_ROWS = Math.ceil(LIGHT_TOP_BUTTON_COUNT / ACTION_COLS);
 const TOPBAR_H = TOPBAR_PAD_Y * 2 + USER_ROW_H + 6 + ACTION_ROWS * ACTION_H + (ACTION_ROWS - 1) * ACTION_GAP;
+const GLOBAL_SCOPE = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {});
+const RUNTIME_TARGET = (typeof __FISH_COCO_RUNTIME_TARGET !== 'undefined' && __FISH_COCO_RUNTIME_TARGET)
+  || GLOBAL_SCOPE.__FISH_COCO_RUNTIME_TARGET
+  || (typeof tt !== 'undefined' ? 'douyin' : (typeof window === 'undefined' ? 'wechat' : 'web'));
+const ANALYTICS_PROVIDERS = {
+  wechat: {
+    enabled() {
+      return RUNTIME_TARGET === 'wechat' && typeof wx !== 'undefined' && typeof wx.reportEvent === 'function';
+    },
+    report(eventId, data) {
+      wx.reportEvent(eventId, data);
+    },
+  },
+};
+let analyticsShowCount = 0;
+let bgmAudio = null;
+let bgmStarted = false;
+const sfxAudio = {};
+
+function analyticsProvider() {
+  return ANALYTICS_PROVIDERS[RUNTIME_TARGET] || null;
+}
+function analyticsNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+function analyticsString(value) {
+  return String(value == null ? '' : value).slice(0, 80);
+}
+function analyticsLevel() {
+  return Math.max(1, Math.floor(analyticsNumber(user && user.stats && user.stats.totalCatches) / 5) + 1);
+}
+function analyticsStage() {
+  const catches = analyticsNumber(user && user.stats && user.stats.totalCatches);
+  if (catches <= 0) return 'new';
+  if (catches < 10) return 'early';
+  if (catches < 50) return 'mid';
+  return 'advanced';
+}
+function sanitizeAnalyticsData(data) {
+  const clean = {};
+  Object.keys(data || {}).forEach((key) => {
+    const value = data[key];
+    if (value === undefined || typeof value === 'function') return;
+    if (typeof value === 'number') clean[key] = Number.isFinite(value) ? value : 0;
+    else if (typeof value === 'boolean') clean[key] = value;
+    else if (value === null) clean[key] = '';
+    else clean[key] = analyticsString(value);
+  });
+  return clean;
+}
+function commonAnalyticsData(extra = {}) {
+  let env = null;
+  let rod = null;
+  try { env = environmentEffects(); } catch (_) {}
+  try { rod = activeRod(); } catch (_) {}
+  return sanitizeAnalyticsData({
+    runtime_target: RUNTIME_TARGET,
+    player_stage: analyticsStage(),
+    level: analyticsLevel(),
+    total_catches: analyticsNumber(user && user.stats && user.stats.totalCatches),
+    dex_count: user && user.dex ? Object.keys(user.dex).length : 0,
+    bait_id: user && user.currentBait || '',
+    rod_id: rod && rod.id || '',
+    season_id: env && env.season && env.season.id || '',
+    weather_id: env && env.weather && env.weather.id || '',
+    province: user && user.province || '',
+    chance_left: analyticsNumber(user && user.chances && user.chances.left),
+    chance_max: analyticsNumber(user && user.chances && user.chances.max),
+    ...extra,
+  });
+}
+function reportEventSafe(eventId, data = {}) {
+  const provider = analyticsProvider();
+  if (!provider || !provider.enabled()) return;
+  try {
+    provider.report(eventId, commonAnalyticsData(data));
+  } catch (error) {
+    console.warn('analytics report failed', eventId, error);
+  }
+}
+function reportGameShow(source) {
+  analyticsShowCount += 1;
+  reportEventSafe('game_show', {
+    show_source: source,
+    show_index: analyticsShowCount,
+    backend_ready: !!backendReady,
+    rank_scope: rankScope,
+  });
+}
+function reportEconomyChange(data) {
+  reportEventSafe('economy_change', data);
+}
+function createBgmAudio() {
+  if (bgmAudio) return bgmAudio;
+  if (typeof wx === 'undefined' || typeof wx.createInnerAudioContext !== 'function') return null;
+  try {
+    const audio = wx.createInnerAudioContext();
+    audio.src = BGM_PATH;
+    audio.loop = true;
+    audio.volume = BGM_VOLUME;
+    if (typeof audio.onPlay === 'function') {
+      audio.onPlay(() => { bgmStarted = true; });
+    }
+    if (typeof audio.onError === 'function') {
+      audio.onError((error) => {
+        bgmStarted = false;
+        console.warn('bgm audio failed', error);
+      });
+    }
+    bgmAudio = audio;
+  } catch (error) {
+    console.warn('bgm init failed', error);
+    bgmAudio = null;
+  }
+  return bgmAudio;
+}
+function startBgm(source = 'auto') {
+  const audio = createBgmAudio();
+  if (!audio || bgmStarted) return;
+  try {
+    const result = audio.play();
+    if (result && typeof result.then === 'function') {
+      result
+        .then(() => { bgmStarted = true; })
+        .catch((error) => {
+          bgmStarted = false;
+          console.warn('bgm play deferred', source, error);
+        });
+    } else {
+      bgmStarted = true;
+    }
+  } catch (error) {
+    bgmStarted = false;
+    console.warn('bgm play failed', source, error);
+  }
+}
+function createSfxAudio(id) {
+  const src = SFX_PATHS[id];
+  if (!src || typeof wx === 'undefined' || typeof wx.createInnerAudioContext !== 'function') return null;
+  if (sfxAudio[id]) return sfxAudio[id];
+  try {
+    const audio = wx.createInnerAudioContext();
+    audio.src = src;
+    audio.loop = false;
+    audio.volume = SFX_VOLUME;
+    if (typeof audio.onError === 'function') {
+      audio.onError((error) => {
+        console.warn('sfx audio failed', id, error);
+      });
+    }
+    sfxAudio[id] = audio;
+  } catch (error) {
+    console.warn('sfx init failed', id, error);
+    sfxAudio[id] = null;
+  }
+  return sfxAudio[id];
+}
+function playSfx(id) {
+  const audio = createSfxAudio(id);
+  if (!audio) return;
+  try {
+    if (typeof audio.stop === 'function') audio.stop();
+    if (typeof audio.seek === 'function') audio.seek(0);
+    else audio.startTime = 0;
+    const result = audio.play();
+    if (result && typeof result.catch === 'function') result.catch((error) => console.warn('sfx play deferred', id, error));
+  } catch (error) {
+    console.warn('sfx play failed', id, error);
+  }
+}
+function playActionSfx(t) {
+  if (!t || !t.id) return;
+  const id = t.id;
+  if (id.startsWith('top:') || id === 'openrank' || id === 'buybaitn') {
+    playSfx('panelOpen');
+    return;
+  }
+  if (id === 'modal:close') {
+    playSfx('panelClose');
+    return;
+  }
+  if ([
+    'shoptab', 'fishdextab', 'fishdexprev', 'fishdexnext',
+    'ranktab', 'gachatab', 'gachaseason', 'provinceNext',
+  ].includes(id)) {
+    playSfx('switch');
+    return;
+  }
+  if ([
+    'mobile-action', 'cast', 'hit',
+    'baitprev', 'baitnext', 'rodprev', 'rodnext',
+    'toggleauto',
+    'buybait', 'buyrod',
+    'claimgoal', 'gacha', 'redeemcode',
+    'sharecopy', 'shareChance', 'coinChance', 'resultShare', 'rankshare',
+    'equiprod', 'equipchar', 'equippet', 'equipacc',
+  ].includes(id)) return;
+  playSfx('uiClick');
+}
 
 const RARITY_NAME = {
   trash: '垃圾',
@@ -615,12 +834,24 @@ function environmentEffects() {
     valueBonus,
   };
 }
-function grantChance(reason) {
+function grantChance(reason, source = 'manual', extra = {}) {
+  const before = analyticsNumber(user.chances.left);
   user.chances.left = Math.min(user.chances.max, user.chances.left + 1);
+  const gained = analyticsNumber(user.chances.left) - before;
+  playSfx(gained > 0 ? 'reward' : 'error');
   status = reason || '获得 1 次钓鱼机会';
   saveUser();
+  reportEconomyChange({
+    action: 'chance_recover',
+    recover_method: source,
+    chance_left_before: before,
+    chance_left_after: analyticsNumber(user.chances.left),
+    chance_gain: Math.max(0, gained),
+    ...extra,
+  });
 }
 function failCatch(reason) {
+  const failedCatch = hb.catch;
   state.phase = 'idle';
   hb.active = false;
   hb.catch = null;
@@ -631,9 +862,20 @@ function failCatch(reason) {
     noChance: '今天的钓鱼次数用完了',
   };
   status = textMap[reason] || '这次没钓上来';
+  playSfx(reason === 'noChance' ? 'error' : 'fail');
   user.lastFailure = { reason, at: Date.now(), province: user.province };
   modal = { type: 'failure', reason };
   saveUser();
+  reportEventSafe('fish_result', {
+    result: 'failure',
+    fail_reason: reason || 'unknown',
+    fish_id: failedCatch && failedCatch.item && failedCatch.item.id || '',
+    fish_kind: failedCatch && failedCatch.kind || '',
+    rarity: failedCatch && failedCatch.rarity || '',
+    hits_done: analyticsNumber(hb.hits),
+    hits_need: analyticsNumber(hb.need),
+    score: 0,
+  });
 }
 function catchScore(c) {
   const rarityScore = { trash: 10, common: 60, rare: 180, legendary: 520, hidden: 1200, treasure: 260, limited: 420, rod_exclusive: 500 };
@@ -787,16 +1029,31 @@ function claimDailyGoal(id) {
   user.daily = ensureDaily(user.daily);
   if (user.daily.claimed[goal.id]) {
     status = '这个目标奖励已经领取过了';
+    playSfx('error');
     return;
   }
   if (!dailyGoalReady(goal)) {
     status = '目标还没有完成，继续钓鱼或查看相关入口';
+    playSfx('error');
     return;
   }
+  const moneyBefore = analyticsNumber(user.money);
+  const diamondsBefore = analyticsNumber(user.diamonds);
+  const chanceBefore = analyticsNumber(user.chances.left);
   applyDailyGoalReward(goal);
   user.daily.claimed[goal.id] = true;
   status = `已领取${goal.name}奖励：${dailyGoalRewardText(goal)}`;
+  playSfx('reward');
   saveUser();
+  reportEconomyChange({
+    action: 'daily_goal_claim',
+    item_type: 'daily_goal',
+    item_id: goal.id,
+    currency: 'mixed',
+    amount: analyticsNumber(user.money) - moneyBefore,
+    diamond_amount: analyticsNumber(user.diamonds) - diamondsBefore,
+    chance_gain: analyticsNumber(user.chances.left) - chanceBefore,
+  });
 }
 function markDailyFlag(flag) {
   user.daily = ensureDaily(user.daily);
@@ -889,12 +1146,27 @@ function cast() {
   const count = user.baits[user.currentBait] || 0;
   if (count <= 0) {
     status = '鱼饵不足：点商店补货，也可先领今日目标奖励';
+    playSfx('error');
+    reportEventSafe('fish_cast', {
+      success: false,
+      fail_reason: 'no_bait',
+      bait_count_before: count,
+      chance_left_before: analyticsNumber(user.chances.left),
+    });
     return;
   }
   if ((user.chances.left || 0) <= 0) {
+    reportEventSafe('fish_cast', {
+      success: false,
+      fail_reason: 'no_chance',
+      bait_count_before: count,
+      chance_left_before: analyticsNumber(user.chances.left),
+    });
     failCatch('noChance');
     return;
   }
+  const baitBefore = count;
+  const chanceBefore = analyticsNumber(user.chances.left);
   user.baits[user.currentBait] -= 1;
   user.chances.left -= 1;
   const env = environmentEffects();
@@ -903,7 +1175,16 @@ function cast() {
   state.hookX = W * 0.5 + (Math.random() - .5) * 80;
   state.hookY = sceneTop() + sceneHeight() * .52 + Math.random() * 30;
   status = `${env.season.name}${env.weather.name}，已抛竿等待上钩...`;
+  playSfx('cast');
   saveUser();
+  reportEventSafe('fish_cast', {
+    success: true,
+    bait_count_before: baitBefore,
+    bait_count_after: analyticsNumber(user.baits[user.currentBait]),
+    chance_left_before: chanceBefore,
+    chance_left_after: analyticsNumber(user.chances.left),
+    wait_seconds: Math.round(state.wait * 100) / 100,
+  });
 }
 function startHitbar() {
   if (state.phase !== 'hooked') return;
@@ -920,6 +1201,7 @@ function startHitbar() {
   hb.time = 12;
   hb.active = true;
   status = `${RARITY_NAME[hb.catch.rarity]}级目标上钩了`;
+  playSfx('hit');
 }
 function hitbarClick() {
   if (!hb.active || state.phase !== 'reeling') return;
@@ -928,6 +1210,7 @@ function hitbarClick() {
     return;
   }
   hb.hits += 1;
+  playSfx('hit');
   if (hb.hits < hb.need) {
     hb.zone = Math.random() * (1 - hb.width);
     status = `命中！${hb.hits}/${hb.need}`;
@@ -950,8 +1233,12 @@ function applyCatch(c) {
   const bonus = petBonus();
   const env = environmentEffects();
   const envCoinBonus = Math.round(c.value * env.valueBonus);
-  user.money += c.value + envCoinBonus + bonus.coins;
-  user.diamonds += c.diamondValue + bonus.diamonds;
+  const coinGain = c.value + envCoinBonus + bonus.coins;
+  const diamondGain = c.diamondValue + bonus.diamonds;
+  const isNewDex = !user.dex[c.item.id];
+  const previousBestScore = user.ranking.bestScore || 0;
+  user.money += coinGain;
+  user.diamonds += diamondGain;
   user.dex[c.item.id] = user.dex[c.item.id] || { count: 0, maxWeight: 0 };
   user.dex[c.item.id].count += 1;
   user.dex[c.item.id].maxWeight = Math.max(user.dex[c.item.id].maxWeight || 0, c.weight);
@@ -968,6 +1255,19 @@ function applyCatch(c) {
   user.history.unshift({ name: c.item.name, rarity: c.rarity, weight: c.weight, value: c.value, score, at: Date.now() });
   if (user.history.length > 30) user.history.length = 30;
   status = `钓到 ${c.item.name}，本局 ${score} 分`;
+  playSfx('catchSuccess');
+  reportEventSafe('fish_result', {
+    result: 'success',
+    fish_id: c.item.id,
+    fish_kind: c.kind,
+    rarity: c.rarity,
+    weight: c.weight || 0,
+    score,
+    coin_gain: coinGain,
+    diamond_gain: diamondGain,
+    is_new_dex: isNewDex,
+    is_best_score: score > previousBestScore,
+  });
 }
 function buyBait(id, count) {
   const bait = BAITS[id];
@@ -976,12 +1276,24 @@ function buyBait(id, count) {
   const cur = bait.currency === 'diamonds' ? 'diamonds' : 'money';
   if (user[cur] < cost) {
     status = cur === 'diamonds' ? '钻石不足' : '金币不足';
+    playSfx('error');
     return;
   }
   user[cur] -= cost;
   user.baits[id] = (user.baits[id] || 0) + count;
   status = `购买 ${count} 个${bait.name}`;
+  playSfx('buy');
   saveUser();
+  reportEconomyChange({
+    action: 'buy_bait',
+    item_type: 'bait',
+    item_id: id,
+    item_count: count,
+    currency: cur === 'diamonds' ? 'diamonds' : 'money',
+    amount: -cost,
+    balance_after: analyticsNumber(user[cur]),
+    item_count_after: analyticsNumber(user.baits[id]),
+  });
 }
 function buyRod(id) {
   const rod = RODS.find((item) => item.id === id);
@@ -989,23 +1301,36 @@ function buyRod(id) {
   const dexCount = Object.keys(user.dex).length;
   if (dexCount < rod.threshold) {
     status = `图鉴 ${dexCount}/${rod.threshold}，暂不能购买${rod.name}`;
+    playSfx('error');
     return;
   }
   if (user.ownedRods.includes(id)) {
     user.rodSkin = id;
     status = `已装备${rod.name}`;
+    playSfx('switch');
     saveUser();
     return;
   }
   if (user.money < rod.price) {
     status = `金币不足，购买${rod.name}需要 ${rod.price}`;
+    playSfx('error');
     return;
   }
   user.money -= rod.price;
   user.ownedRods.push(id);
   user.rodSkin = id;
   status = `购买并装备${rod.name}`;
+  playSfx('buy');
   saveUser();
+  reportEconomyChange({
+    action: 'buy_rod',
+    item_type: 'rod',
+    item_id: id,
+    currency: 'money',
+    amount: -rod.price,
+    balance_after: analyticsNumber(user.money),
+    owned_rod_count: user.ownedRods.length,
+  });
 }
 function askBuyBaitCount(id) {
   const bait = BAITS[id];
@@ -1020,6 +1345,7 @@ function askBuyBaitCount(id) {
       const count = Math.floor(Number(res.content));
       if (!Number.isFinite(count) || count <= 0) {
         status = '购买数量不正确';
+        playSfx('error');
         return;
       }
       buyBait(id, count);
@@ -1029,16 +1355,19 @@ function askBuyBaitCount(id) {
 function changeBait(delta) {
   if (state.phase !== 'idle') {
     status = '钓鱼中不能切换鱼饵';
+    playSfx('error');
     return;
   }
   const current = Math.max(0, BAIT_IDS.indexOf(user.currentBait));
   user.currentBait = BAIT_IDS[(current + delta + BAIT_IDS.length) % BAIT_IDS.length];
   status = `当前鱼饵：${BAITS[user.currentBait].name}`;
+  playSfx('switch');
   saveUser();
 }
 function changeRod(delta) {
   if (state.phase !== 'idle') {
     status = '钓鱼中不能切换鱼竿';
+    playSfx('error');
     return;
   }
   const rods = ownedRodList();
@@ -1047,6 +1376,7 @@ function changeRod(delta) {
   const next = rods[(index + delta + rods.length) % rods.length];
   user.rodSkin = next.id;
   status = `当前鱼竿：${next.name}`;
+  playSfx('switch');
   saveUser();
 }
 async function doGacha(count) {
@@ -1055,8 +1385,10 @@ async function doGacha(count) {
   const cur = isDiamond ? 'diamonds' : 'money';
   if (user[cur] < cost) {
     status = isDiamond ? '钻石不足' : '金币不足';
+    playSfx('error');
     return;
   }
+  const balanceBefore = analyticsNumber(user[cur]);
   status = '正在连接云端抽奖...';
   try {
     const data = await apiPost('/api/gacha', {
@@ -1070,9 +1402,22 @@ async function doGacha(count) {
     persistLocalUser();
     modal.result = Array.isArray(data.results) ? data.results : [];
     status = '抽奖完成';
+    playSfx('reward');
+    reportEconomyChange({
+      action: 'gacha',
+      currency: cur,
+      amount: -cost,
+      draw_count: count,
+      gacha_tab: gachaTab,
+      gacha_season: gachaSeason,
+      balance_before: balanceBefore,
+      balance_after: analyticsNumber(user[cur]),
+      result_count: modal.result.length,
+    });
     loadRank(rankScope);
   } catch (error) {
     status = error.message || '抽奖失败';
+    playSfx('error');
   }
 }
 function addUnique(list, id) {
@@ -1161,8 +1506,16 @@ async function redeemCode(code) {
     persistLocalUser();
     const reward = `${data.coins ? data.coins + '金币 ' : ''}${data.diamonds ? data.diamonds + '钻石' : ''}`.trim();
     status = reward ? `兑换成功：${reward}` : '兑换成功';
+    playSfx('reward');
+    reportEconomyChange({
+      action: 'redeem',
+      currency: 'mixed',
+      amount: analyticsNumber(data.coins),
+      diamond_amount: analyticsNumber(data.diamonds),
+    });
   } catch (error) {
     status = error.message || '兑换失败';
+    playSfx('error');
   }
 }
 
@@ -1197,6 +1550,16 @@ function drawText(text, x, y, size, color, align = 'left') {
   ctx.fillStyle = color;
   ctx.fillText(String(text), x, y);
 }
+function drawOutlinedText(text, x, y, size, color, align = 'left', stroke = '#2a1b19') {
+  ctx.font = `${size}px monospace`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(2, Math.round(size * .14));
+  ctx.strokeStyle = stroke;
+  ctx.strokeText(String(text), x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(String(text), x, y);
+}
 function fitText(text, maxWidth, size) {
   const raw = String(text);
   ctx.font = `${size}px monospace`;
@@ -1207,6 +1570,17 @@ function fitText(text, maxWidth, size) {
 }
 function drawFittedText(text, x, y, size, color, align, maxWidth) {
   drawText(fitText(text, maxWidth, size), x, y, size, color, align);
+}
+function compactNumber(value) {
+  const n = Math.max(0, Math.floor(Number(value) || 0));
+  if (n >= 100000000) return `${(n / 100000000).toFixed(n >= 1000000000 ? 1 : 2).replace(/\.0+$/, '')}亿`;
+  if (n >= 10000) return `${(n / 10000).toFixed(n >= 100000 ? 1 : 2).replace(/\.0+$/, '')}万`;
+  return String(n);
+}
+function shortPlayerId(value) {
+  const raw = String(value || '').replace(/^fc_/, '');
+  if (raw.length <= 14) return raw || 'local';
+  return `${raw.slice(0, 6)}-${raw.slice(-6)}`;
 }
 function ux(value) {
   return value / DESIGN_W * W;
@@ -1315,30 +1689,42 @@ function drawResourcePill(x, y, value, iconColor) {
   const py = uy(y);
   const pw = ux(282);
   const ph = uy(64);
-  drawPixelPanel(px + ux(18), py + uy(2), pw - ux(40), ph - uy(2), '#7b4a33', '#2a1b19', '#c58b49');
-  drawRect(px + ux(14), py + uy(12), ux(42), uy(42), iconColor, '#5a341d');
-  drawText(iconColor === '#f8c247' ? '金' : '珠', px + ux(35), py + uy(33), us(18), '#5a341d', 'center');
-  drawFittedText(String(value), px + ux(74), py + uy(33), us(28), '#fff1a8', 'left', ux(146));
-  drawRect(px + ux(220), py, ux(64), uy(64), '#5dbd53', '#1d5d2a');
-  drawText('+', px + ux(252), py + uy(32), us(32), '#f6ffd5', 'center');
+  const isCoin = iconColor === '#f8c247';
+  drawRect(px + ux(22), py + uy(8), pw - ux(42), ph - uy(6), 'rgba(35,20,13,.55)');
+  drawPixelPanel(px + ux(18), py + uy(2), pw - ux(40), ph - uy(2), '#704327', '#201311', '#e2aa5d');
+  drawRect(px + ux(14), py + uy(10), ux(48), uy(48), iconColor, '#4b2a18');
+  drawRect(px + ux(19), py + uy(15), ux(38), uy(8), 'rgba(255,255,255,.35)');
+  drawText(isCoin ? '金' : '钻', px + ux(38), py + uy(34), us(20), isCoin ? '#6a390f' : '#425066', 'center');
+  drawFittedText(isCoin ? '金币' : '钻石', px + ux(78), py + uy(22), us(14), '#d8c491', 'left', ux(126));
+  drawFittedText(compactNumber(value), px + ux(78), py + uy(44), us(27), '#fff1a8', 'left', ux(138));
+  drawRect(px + ux(220), py, ux(64), uy(64), '#4fbf5a', '#174f27');
+  drawRect(px + ux(226), py + uy(6), ux(52), uy(10), 'rgba(255,255,255,.28)');
+  drawOutlinedText('+', px + ux(252), py + uy(32), us(33), '#f6ffd5', 'center', '#174f27');
   addLayoutTarget('top:shop', x + 220, y, 64, 64);
 }
 function drawProfilePanel() {
   const x = ux(40);
   const y = uy(40);
-  drawPixelPanel(x, y, ux(374), uy(172), '#6b3f2a', '#2a1b19', '#d29a5a');
-  drawRect(x + ux(12), y + uy(12), ux(128), uy(128), '#2e6b95', '#221a18');
+  drawRect(x + ux(8), y + uy(8), ux(374), uy(172), 'rgba(35,20,13,.50)');
+  drawPixelPanel(x, y, ux(374), uy(172), '#6a412a', '#1f1412', '#e0a65b');
+  drawRect(x + ux(12), y + uy(12), ux(128), uy(128), '#214d6d', '#1a1210');
+  drawRect(x + ux(18), y + uy(18), ux(116), uy(20), 'rgba(255,255,255,.16)');
   drawCharacterSprite(user.activeCharacter || 'fishing_master', x + ux(23), y + uy(18), ux(106), uy(112));
-  drawPixelPanel(x + ux(150), y + uy(18), ux(250), uy(54), '#4a2d29', '#261817', '#c58b49');
-  drawFittedText(user.username, x + ux(170), y + uy(45), us(22), '#f6f0b8', 'left', ux(204));
-  drawPixelPanel(x + ux(150), y + uy(80), ux(250), uy(52), '#4a2d29', '#261817', '#c58b49');
-  drawFittedText(`UID:${user.username.slice(-10)}`, x + ux(170), y + uy(106), us(20), '#ffffff', 'left', ux(204));
+  drawRect(x + ux(18), y + uy(110), ux(116), uy(24), 'rgba(0,0,0,.36)');
+  drawText(user.province, x + ux(76), y + uy(122), us(17), '#f6ffd5', 'center');
+  drawPixelPanel(x + ux(150), y + uy(16), ux(250), uy(56), '#3c2824', '#201311', '#c58b49');
+  drawFittedText(user.username, x + ux(168), y + uy(44), us(23), '#fff1a8', 'left', ux(210));
+  drawPixelPanel(x + ux(150), y + uy(80), ux(250), uy(52), '#253b4d', '#18242d', '#7fb6d9');
+  drawRect(x + ux(164), y + uy(93), ux(42), uy(26), '#d9a64f', '#5a341d');
+  drawText('ID', x + ux(185), y + uy(106), us(18), '#3d2818', 'center');
+  drawFittedText(shortPlayerId(user.username), x + ux(216), y + uy(106), us(18), '#ffffff', 'left', ux(166));
   const level = Math.max(1, Math.floor((user.stats.totalCatches || 0) / 5) + 1);
   const exp = ((user.stats.totalCatches || 0) % 5) / 5;
-  drawPixelPanel(x + ux(10), y + uy(136), ux(350), uy(38), '#2b4d73', '#22303c', '#7fb6d9');
-  drawText(`LV.${level}`, x + ux(74), y + uy(155), us(22), '#ffffff', 'center');
-  drawRect(x + ux(154), y + uy(148), ux(214), uy(13), '#1d2e44', '#0e1725');
-  drawRect(x + ux(154), y + uy(148), ux(214 * exp), uy(13), '#f08c35');
+  drawPixelPanel(x + ux(10), y + uy(136), ux(350), uy(38), '#263f5b', '#162230', '#7fb6d9');
+  drawText(`LV.${level}`, x + ux(72), y + uy(155), us(21), '#ffffff', 'center');
+  drawRect(x + ux(142), y + uy(147), ux(210), uy(14), '#111827', '#0e1725');
+  drawRect(x + ux(142), y + uy(147), ux(210 * exp), uy(14), '#f08c35');
+  drawRect(x + ux(142), y + uy(147), ux(210 * exp), uy(4), 'rgba(255,255,255,.35)');
 }
 function drawMenuAsset(key, id, x, y, w, h, data) {
   if (!drawLayoutAsset(key, x, y, w, h)) {
@@ -1368,6 +1754,89 @@ function drawMainHud() {
     drawText('挂机中', ux(942), uy(498), us(19), '#ffffff', 'center');
   }
 }
+function firstPersonPoints() {
+  const sway = Math.sin(Date.now() / 520);
+  return {
+    baseX: ux(742),
+    baseY: Math.min(gamebarTop() - uy(10), uy(1742)),
+    tipX: ux(570) + sway * ux(10),
+    tipY: uy(1002) + Math.sin(Date.now() / 680) * uy(8),
+    hookX: state.phase === 'idle' ? ux(612) + sway * ux(8) : state.hookX,
+    hookY: state.phase === 'idle' ? uy(1284) + Math.sin(Date.now() / 180) * uy(4) : state.hookY,
+  };
+}
+function drawFirstPersonScenePatch() {
+  const scene = IMAGES.ui_layout_scene;
+  if (scene && scene.ready) {
+    try {
+      ctx.drawImage(scene, 190, 1076, 360, 340, ux(680), uy(1058), ux(332), uy(312));
+    } catch (_) {}
+  } else {
+    ctx.fillStyle = '#35aee1';
+    ctx.beginPath();
+    ctx.moveTo(ux(690), uy(1088));
+    ctx.lineTo(ux(906), uy(1068));
+    ctx.lineTo(ux(944), uy(1286));
+    ctx.lineTo(ux(694), uy(1316));
+    ctx.closePath();
+    ctx.fill();
+    drawRect(ux(706), uy(1284), ux(276), uy(54), '#2b8fca');
+  }
+  for (let i = 0; i < 8; i += 1) {
+    const x = ux(724 + i * 31);
+    const y = uy(1116 + (i % 3) * 48);
+    drawRect(x, y, ux(46 + (i % 2) * 28), uy(7), 'rgba(179,229,255,.42)');
+  }
+  drawRect(ux(798), uy(1224), ux(282), uy(52), '#9b6a43', '#54351f');
+  drawRect(ux(798), uy(1248), ux(282), uy(6), '#6b442b');
+  [826, 888, 950, 1012].forEach((x) => drawRect(ux(x), uy(1217), ux(13), uy(68), '#6f452d', '#4a2b1c'));
+  [836, 898, 960, 1022].forEach((x) => drawRect(ux(x), uy(1234), ux(52), uy(4), 'rgba(255,214,142,.32)'));
+}
+function drawFirstPersonFishingRig(points) {
+  const rod = activeRod();
+  const dx = points.tipX - points.baseX;
+  const dy = points.tipY - points.baseY;
+  const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+  const nx = -dy / len;
+  const ny = dx / len;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#dff6ff';
+  ctx.lineWidth = Math.max(1, us(2));
+  ctx.beginPath();
+  ctx.moveTo(points.tipX, points.tipY);
+  ctx.lineTo(points.hookX, points.hookY);
+  ctx.stroke();
+  ctx.strokeStyle = '#261817';
+  ctx.lineWidth = Math.max(5, us(11));
+  ctx.beginPath();
+  ctx.moveTo(points.baseX, points.baseY);
+  ctx.lineTo(points.tipX, points.tipY);
+  ctx.stroke();
+  ctx.strokeStyle = rod.color;
+  ctx.lineWidth = Math.max(3, us(7));
+  ctx.beginPath();
+  ctx.moveTo(points.baseX, points.baseY);
+  ctx.lineTo(points.tipX, points.tipY);
+  ctx.stroke();
+  ctx.strokeStyle = rod.hi;
+  ctx.lineWidth = Math.max(1, us(3));
+  ctx.beginPath();
+  ctx.moveTo(points.baseX + nx * ux(5), points.baseY + ny * uy(5));
+  ctx.lineTo(points.tipX + nx * ux(4), points.tipY + ny * uy(4));
+  ctx.stroke();
+  ctx.restore();
+  drawRect(points.hookX - ux(7), points.hookY - uy(11), ux(14), uy(20), '#ff5722', '#5b2a15');
+  drawRect(points.hookX - ux(4), points.hookY - uy(7), ux(8), uy(6), '#fff1a8');
+  const gripX = points.baseX - ux(18);
+  const gripY = points.baseY - uy(12);
+  drawRect(gripX - ux(92), gripY + uy(12), ux(76), uy(44), '#244f73', '#162e44');
+  drawRect(gripX + ux(38), gripY + uy(8), ux(86), uy(44), '#244f73', '#162e44');
+  drawRect(gripX - ux(58), gripY - uy(2), ux(50), uy(42), '#f0b37e', '#5c2d16');
+  drawRect(gripX + ux(16), gripY - uy(10), ux(54), uy(44), '#f0b37e', '#5c2d16');
+  drawRect(gripX - ux(2), gripY - uy(18), ux(36), uy(82), '#4a2d29', '#201311');
+  drawRect(gripX + ux(6), gripY - uy(10), ux(20), uy(64), '#7b4a33', '#d29a5a');
+}
 function drawPsdSceneOverlays() {
   const env = environmentEffects();
   const overlayBottom = uy(1994);
@@ -1393,17 +1862,9 @@ function drawPsdSceneOverlays() {
     drawRect(ux(32), uy(760), ux(1016), uy(72), 'rgba(230,236,238,.22)');
     drawRect(ux(80), uy(1160), ux(900), uy(58), 'rgba(230,236,238,.18)');
   }
-  const rodTipX = ux(760);
-  const rodTipY = uy(1134);
-  const hookX = state.phase === 'idle' ? ux(622) : state.hookX;
-  const hookY = state.phase === 'idle' ? uy(1284) : state.hookY;
-  ctx.strokeStyle = '#dff6ff';
-  ctx.lineWidth = Math.max(1, us(2));
-  ctx.beginPath();
-  ctx.moveTo(rodTipX, rodTipY);
-  ctx.lineTo(hookX, hookY);
-  ctx.stroke();
-  drawRect(hookX - ux(6), hookY - uy(10) + Math.sin(Date.now() / 180) * uy(4), ux(12), uy(18), '#ff5722', '#5b2a15');
+  drawFirstPersonScenePatch();
+  const points = firstPersonPoints();
+  drawFirstPersonFishingRig(points);
   if (state.phase === 'hooked') drawLayoutAsset('event_alert', 862, 902, 156, 168);
 }
 function drawScene() {
@@ -1471,54 +1932,27 @@ function drawScene() {
     drawRect(CONTENT_X + 20, top + h * .58, CONTENT_W - 40, 18, 'rgba(230,236,238,.22)');
   }
   drawRect(CONTENT_X + CONTENT_W - 62, top + 28, 26, 26, '#ffeb3b');
-  const rod = activeRod();
-  const bx = CONTENT_X + CONTENT_W - 46;
-  const by = top + h + 4;
-  const tx = CONTENT_X + CONTENT_W * .46 + Math.sin(Date.now() / 600) * 5;
-  const ty = top + h * .35;
-  ctx.strokeStyle = rod.color;
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(bx, by);
-  ctx.lineTo(tx, ty);
-  ctx.stroke();
-  ctx.strokeStyle = rod.hi;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(bx, by);
-  ctx.lineTo(tx, ty);
-  ctx.stroke();
-  const hookX = state.phase === 'idle' ? CONTENT_X + CONTENT_W * .50 : state.hookX;
-  const hookY = state.phase === 'idle' ? waterY + 42 : state.hookY;
-  ctx.strokeStyle = '#dff6ff';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(tx, ty);
-  ctx.lineTo(hookX, hookY);
-  ctx.stroke();
-  drawRect(hookX - 3, hookY - 5 + Math.sin(Date.now() / 180) * 3, 6, 8, '#ff5722');
-  drawRect(CONTENT_X + CONTENT_W - 130, top + h - 30, 28, 30, '#f2b1aa');
-  drawRect(CONTENT_X + CONTENT_W - 88, top + h - 22, 18, 22, '#f2b1aa');
-  if (!drawCharacterSprite(user.activeCharacter || 'fishing_master', CONTENT_X + CONTENT_W - 90, top + h - 66, 56, 68)) {
-    drawRect(CONTENT_X + CONTENT_W - 82, top + h - 28, 26, 26, '#fdbcb4');
-    drawRect(CONTENT_X + CONTENT_W - 42, top + h - 20, 18, 18, '#fdbcb4');
-  }
+  drawFirstPersonFishingRig(firstPersonPoints());
 }
 function drawGamebar() {
   const bait = BAITS[user.currentBait];
   const rod = activeRod();
   const env = environmentEffects();
+  const castW = 380;
+  const castH = 165;
+  const castX = (DESIGN_W - castW) / 2;
+  const castY = 1786;
   drawLayoutAsset('control_meter', 312, 1742, 244, 220);
   drawLayoutAsset('base', -1, 1994, 1082, 341);
-  if (!drawLayoutAsset('button_cast', 448, 1786, 380, 165)) {
-    drawPixelPanel(ux(448), uy(1786), ux(380), uy(165), '#ffd64d', '#4c2a1d', '#fff0a8');
-    drawText(mobileActionLabel(), ux(638), uy(1868), us(64), '#332523', 'center');
+  if (!drawLayoutAsset('button_cast', castX, castY, castW, castH)) {
+    drawPixelPanel(ux(castX), uy(castY), ux(castW), uy(castH), '#ffd64d', '#4c2a1d', '#fff0a8');
+    drawText(mobileActionLabel(), ux(castX + castW / 2), uy(castY + castH / 2), us(64), '#332523', 'center');
   }
   if (state.phase !== 'idle') {
-    drawRect(ux(560), uy(1812), ux(250), uy(112), 'rgba(255,214,77,.72)');
-    drawText(mobileActionLabel(), ux(688), uy(1868), us(46), '#332523', 'center');
+    drawRect(ux(castX + 60), uy(castY + 26), ux(castW - 120), uy(112), 'rgba(255,214,77,.72)');
+    drawText(mobileActionLabel(), ux(castX + castW / 2), uy(castY + castH / 2), us(46), '#332523', 'center');
   }
-  addLayoutTarget('mobile-action', 448, 1786, 380, 165);
+  addLayoutTarget('mobile-action', castX, castY, castW, castH);
   if (!drawLayoutAsset('button_bait', 114, 1945, 150, 167)) {
     drawPixelPanel(ux(114), uy(1945), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
@@ -1532,12 +1966,16 @@ function drawGamebar() {
   drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
   drawAsset('rod_' + rod.id, ux(802), uy(1998), ux(72), uy(72));
   drawFittedText(rod.name, ux(834), uy(1980), us(24), '#fff1a8', 'center', ux(206));
-  drawRect(ux(224), uy(1632), ux(632), uy(58), 'rgba(28,31,45,.78)', '#fff1a8');
-  drawFittedText(`${env.season.name}${env.weather.name} · ${status}`, W / 2, uy(1661), us(23), '#e9ffd5', 'center', ux(586));
+  drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
+  drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
+  drawRect(ux(242), uy(1643), ux(94), uy(30), '#c58b49', '#5a341d');
+  drawText('鱼讯', ux(289), uy(1658), us(19), '#3d2818', 'center');
+  drawFittedText(`${env.season.name}${env.weather.name} · ${status}`, ux(604), uy(1658), us(23), '#e9ffd5', 'center', ux(486));
   const rankBrief = rankScope === 'provinceWar'
     ? `${user.province}队 ${user.ranking.todayScore || 0}分`
     : `${rankLabel(rankScope)} ${user.ranking.bestScore || 0}`;
-  drawFittedText(`次数 ${user.chances.left}/${user.chances.max} · ${rankBrief}`, ux(540), uy(2146), us(22), '#cbd5e1', 'center', ux(520));
+  drawPixelPanel(ux(278), uy(2122), ux(524), uy(52), '#263f5b', '#172536', '#87c7e8');
+  drawFittedText(`次数 ${user.chances.left}/${user.chances.max} · ${rankBrief}`, ux(540), uy(2148), us(22), '#eaf7ff', 'center', ux(486));
 }
 function drawHitbar() {
   if (!hb.active) return;
@@ -1986,6 +2424,7 @@ function update() {
       state.phase = 'hooked';
       state.bite = 3;
       status = '鱼上钩了！点击画面响应';
+      playSfx('bite');
     }
     } else if (state.phase === 'hooked') {
     state.bite -= dt;
@@ -2022,8 +2461,10 @@ function loop() {
   requestAnimationFrame(loop);
 }
 function handleTap(x, y) {
+  startBgm('tap');
   const target = targets.slice().reverse().find((t) => hitTarget(x, y, t));
   if (target) {
+    playActionSfx(target);
     handleAction(target);
     return;
   }
@@ -2040,6 +2481,11 @@ function handleAction(t) {
       saveUser();
     } else {
       modal = { type };
+      reportEventSafe('ui_panel_open', {
+        panel: type,
+        open_source: 'top_button',
+        panel_tab: t.data && t.data.tab || '',
+      });
       if (type === 'dex') {
         activeFishDexFilter = 'all';
         fishDexPage = 0;
@@ -2063,10 +2509,12 @@ function handleAction(t) {
   else if (t.id === 'toggleauto') {
     user.vipAuto = !user.vipAuto;
     status = user.vipAuto ? '挂机钓鱼已开启' : '挂机钓鱼已关闭';
+    playSfx('toggle');
     saveUser();
   }
   else if (t.id === 'mobile-action') {
     if (state.phase === 'idle') cast();
+    else if (state.phase === 'waiting') playSfx('uiClick');
     else if (state.phase === 'hooked') startHitbar();
     else if (state.phase === 'reeling') hitbarClick();
   }
@@ -2074,10 +2522,20 @@ function handleAction(t) {
   else if (t.id === 'modal:close') modal = null;
   else if (t.id === 'openrank') {
     modal = { type: 'rank' };
+    reportEventSafe('ui_panel_open', {
+      panel: 'rank',
+      open_source: 'inline_button',
+      rank_scope: rankScope,
+    });
     loadRank(rankScope);
   }
   else if (t.id === 'ranktab') {
     rankScope = t.data.scope === 'national' ? 'national' : t.data.scope === 'province' ? 'province' : 'provinceWar';
+    reportEventSafe('ui_panel_open', {
+      panel: 'rank',
+      open_source: 'rank_tab',
+      rank_scope: rankScope,
+    });
     loadRank(rankScope);
   }
   else if (t.id === 'fishdextab') {
@@ -2093,15 +2551,19 @@ function handleAction(t) {
   else if (t.id === 'claimgoal') claimDailyGoal(t.data.id);
   else if (t.id === 'equiprod') {
     user.rodSkin = t.data.id;
+    playSfx('switch');
     saveUser();
   } else if (t.id === 'equipchar') {
     user.activeCharacter = t.data.id;
+    playSfx('switch');
     saveUser();
   } else if (t.id === 'equippet') {
     user.activePet = user.activePet === t.data.id ? null : t.data.id;
+    playSfx('switch');
     saveUser();
   } else if (t.id === 'equipacc') {
     user.equippedAccessory = user.equippedAccessory === t.data.uid ? null : t.data.uid;
+    playSfx('switch');
     saveUser();
   } else if (t.id === 'gachatab') {
     gachaTab = t.data.tab;
@@ -2115,38 +2577,88 @@ function handleAction(t) {
   } else if (t.id === 'redeemcode') {
     redeemCode(t.data.code);
   } else if (t.id === 'sharecopy') {
+    playSfx('share');
     wx.setClipboardData({ data: '像素钓鱼小游戏，快来一起钓鱼！' });
     const today = new Date().toDateString();
+    let rewardGranted = false;
     if (user.lastShareDate !== today) {
       user.money += 10;
       user.lastShareDate = today;
       saveUser();
+      rewardGranted = true;
+      reportEconomyChange({
+        action: 'share_reward',
+        share_type: 'invite_copy',
+        currency: 'money',
+        amount: 10,
+        balance_after: analyticsNumber(user.money),
+      });
     }
     status = '分享口令已复制';
+    reportEventSafe('share_action', {
+      share_type: 'invite_copy',
+      reward_granted: rewardGranted,
+      reward_currency: rewardGranted ? 'money' : '',
+      reward_amount: rewardGranted ? 10 : 0,
+    });
   } else if (t.id === 'shareChance') {
     wx.setClipboardData({ data: `我正在为${user.province}队冲榜，${rankSummaryText('provinceWar')}，快来帮本省加一分！` });
     if (user.chances.shareGrants >= 3) {
       status = '今日分享补次数已达上限，可用金币补次数或明天再来';
+      playSfx('error');
+      reportEventSafe('share_action', {
+        share_type: 'chance_recover',
+        reward_granted: false,
+        fail_reason: 'daily_limit',
+        share_grants_today: user.chances.shareGrants,
+      });
     } else {
+      playSfx('share');
       user.chances.shareGrants += 1;
-      grantChance('分享成功，获得 1 次钓鱼机会');
+      grantChance('分享成功，获得 1 次钓鱼机会', 'share', {
+        share_grants_today: user.chances.shareGrants,
+      });
       modal = null;
+      reportEventSafe('share_action', {
+        share_type: 'chance_recover',
+        reward_granted: true,
+        reward_type: 'chance',
+        reward_amount: 1,
+        share_grants_today: user.chances.shareGrants,
+      });
     }
   } else if (t.id === 'coinChance') {
     if (user.money < 50) {
       status = '金币不足，分享或明天再来';
+      playSfx('error');
     } else {
       user.money -= 50;
-      grantChance('已消耗 50 金币，获得 1 次钓鱼机会');
+      grantChance('已消耗 50 金币，获得 1 次钓鱼机会', 'coin', {
+        currency: 'money',
+        amount: -50,
+        balance_after: analyticsNumber(user.money),
+      });
       modal = null;
     }
   } else if (t.id === 'resultShare') {
+    playSfx('share');
     const score = modal && modal.catch ? catchScore(modal.catch) : (user.ranking.bestScore || 0);
     wx.setClipboardData({ data: `我刚为${user.province}队贡献 ${score} 分，${rankSummaryText('provinceWar')}，等你来一起冲榜！` });
     status = '战绩口令已复制';
+    reportEventSafe('share_action', {
+      share_type: 'result',
+      score,
+      reward_granted: false,
+    });
   } else if (t.id === 'rankshare') {
+    playSfx('share');
     wx.setClipboardData({ data: `今天加入${user.province}队钓鱼冲榜，${rankSummaryText('provinceWar')}，快来一起给本省上分！` });
     status = '省队召集口令已复制';
+    reportEventSafe('share_action', {
+      share_type: 'rank_invite',
+      rank_scope: rankScope,
+      reward_granted: false,
+    });
   } else if (t.id === 'provinceNext') {
     const idx = Math.max(0, PROVINCES.indexOf(user.province));
     user.province = PROVINCES[(idx + 1) % PROVINCES.length];
@@ -2163,7 +2675,11 @@ wx.onTouchEnd((event) => {
 });
 wx.onShow(() => {
   user = loadUser();
+  startBgm('show');
+  reportGameShow('show');
   syncBackendUser();
 });
+startBgm('launch');
+reportGameShow('launch');
 syncBackendUser();
 loop();

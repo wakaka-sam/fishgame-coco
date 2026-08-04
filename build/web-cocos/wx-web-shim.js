@@ -36,9 +36,56 @@
     } catch (_) {}
   }
 
+  function createInnerAudioContext() {
+    var audio = new Audio();
+    audio.preload = 'auto';
+    var ctx = {};
+    Object.defineProperty(ctx, 'src', {
+      get: function () { return audio.getAttribute('src') || ''; },
+      set: function (value) { audio.src = value || ''; },
+    });
+    Object.defineProperty(ctx, 'loop', {
+      get: function () { return audio.loop; },
+      set: function (value) { audio.loop = !!value; },
+    });
+    Object.defineProperty(ctx, 'volume', {
+      get: function () { return audio.volume; },
+      set: function (value) {
+        var next = Number(value);
+        audio.volume = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
+      },
+    });
+    Object.defineProperty(ctx, 'paused', {
+      get: function () { return audio.paused; },
+    });
+    ctx.play = function () {
+      var result = audio.play();
+      if (result && typeof result.catch === 'function') {
+        result.catch(function (error) { console.warn('audio play deferred', error); });
+      }
+      return result;
+    };
+    ctx.pause = function () { audio.pause(); };
+    ctx.stop = function () {
+      audio.pause();
+      try { audio.currentTime = 0; } catch (_) {}
+    };
+    ctx.destroy = function () {
+      audio.pause();
+      audio.removeAttribute('src');
+      try { audio.load(); } catch (_) {}
+    };
+    ctx.onPlay = function (handler) { audio.addEventListener('play', handler); };
+    ctx.onError = function (handler) {
+      audio.addEventListener('error', function () { handler(audio.error || {}); });
+    };
+    return ctx;
+  }
+
   window.wx = {
     createCanvas: ensureCanvas,
     createImage: function () { return new Image(); },
+    createInnerAudioContext: createInnerAudioContext,
     getSystemInfoSync: function () {
       return {
         windowWidth: window.innerWidth,

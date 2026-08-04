@@ -7,6 +7,12 @@ const runtimeGame = path.join(root, 'src/runtime/game.js');
 const wechatDir = path.join(root, 'build/wechatgame');
 const webDir = path.join(root, 'build/web-cocos');
 
+function writeRuntime(dest, target) {
+  const source = fs.readFileSync(runtimeGame, 'utf8');
+  const prologue = `var __FISH_COCO_RUNTIME_TARGET = ${JSON.stringify(target)};\n`;
+  fs.writeFileSync(dest, prologue + source, 'utf8');
+}
+
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -27,11 +33,15 @@ const uiLayoutAssets = path.join(root, 'assets', 'ui_layout');
 if (fs.existsSync(uiLayoutAssets)) {
   copyDir(uiLayoutAssets, path.join(wechatDir, 'assets', 'ui_layout'));
 }
-fs.copyFileSync(runtimeGame, path.join(wechatDir, 'game.js'));
+const audioAssets = path.join(root, 'assets', 'audio');
+if (fs.existsSync(audioAssets)) {
+  copyDir(audioAssets, path.join(wechatDir, 'assets', 'audio'));
+}
+writeRuntime(path.join(wechatDir, 'game.js'), 'wechat');
 
 fs.rmSync(webDir, { recursive: true, force: true });
 fs.mkdirSync(webDir, { recursive: true });
-fs.copyFileSync(runtimeGame, path.join(webDir, 'game.js'));
+writeRuntime(path.join(webDir, 'game.js'), 'web');
 copyDir(path.join(wechatDir, 'assets'), path.join(webDir, 'assets'));
 
 fs.writeFileSync(path.join(webDir, 'index.html'), `<!DOCTYPE html>
@@ -104,9 +114,56 @@ fs.writeFileSync(path.join(webDir, 'wx-web-shim.js'), `(function () {
     } catch (_) {}
   }
 
+  function createInnerAudioContext() {
+    var audio = new Audio();
+    audio.preload = 'auto';
+    var ctx = {};
+    Object.defineProperty(ctx, 'src', {
+      get: function () { return audio.getAttribute('src') || ''; },
+      set: function (value) { audio.src = value || ''; },
+    });
+    Object.defineProperty(ctx, 'loop', {
+      get: function () { return audio.loop; },
+      set: function (value) { audio.loop = !!value; },
+    });
+    Object.defineProperty(ctx, 'volume', {
+      get: function () { return audio.volume; },
+      set: function (value) {
+        var next = Number(value);
+        audio.volume = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
+      },
+    });
+    Object.defineProperty(ctx, 'paused', {
+      get: function () { return audio.paused; },
+    });
+    ctx.play = function () {
+      var result = audio.play();
+      if (result && typeof result.catch === 'function') {
+        result.catch(function (error) { console.warn('audio play deferred', error); });
+      }
+      return result;
+    };
+    ctx.pause = function () { audio.pause(); };
+    ctx.stop = function () {
+      audio.pause();
+      try { audio.currentTime = 0; } catch (_) {}
+    };
+    ctx.destroy = function () {
+      audio.pause();
+      audio.removeAttribute('src');
+      try { audio.load(); } catch (_) {}
+    };
+    ctx.onPlay = function (handler) { audio.addEventListener('play', handler); };
+    ctx.onError = function (handler) {
+      audio.addEventListener('error', function () { handler(audio.error || {}); });
+    };
+    return ctx;
+  }
+
   window.wx = {
     createCanvas: ensureCanvas,
     createImage: function () { return new Image(); },
+    createInnerAudioContext: createInnerAudioContext,
     getSystemInfoSync: function () {
       return {
         windowWidth: window.innerWidth,
