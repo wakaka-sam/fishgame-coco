@@ -1893,6 +1893,47 @@ function clearRightBankToWater() {
   drawRect(ux(1000), uy(1342), ux(58), uy(5), 'rgba(185,235,244,.38)');
   drawRect(ux(1018), uy(1392), ux(34), uy(5), 'rgba(25,139,190,.30)');
 }
+function drawSceneTextureRepaint() {
+  const scene = IMAGES.ui_layout_scene;
+  if (!scene || !scene.ready) return;
+  ctx.save();
+  // Reuse the original water pixels to erase the right bank without a new color block.
+  ctx.beginPath();
+  ctx.moveTo(W, uy(960));
+  ctx.lineTo(W, uy(1540));
+  ctx.lineTo(ux(850), uy(1510));
+  ctx.lineTo(ux(790), uy(1400));
+  ctx.lineTo(ux(782), uy(1180));
+  ctx.lineTo(ux(850), uy(1050));
+  ctx.lineTo(ux(980), uy(990));
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(scene, 300, 900, 300, 560, ux(880), uy(940), ux(220), uy(620));
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ux(760), uy(1140), ux(190), uy(250));
+  ctx.clip();
+  ctx.drawImage(scene, 300, 900, 190, 250, ux(760), uy(1140), ux(190), uy(250));
+  ctx.restore();
+
+  ctx.save();
+  // Reuse the original right-bank texture as a tiled first-person foreground.
+  ctx.beginPath();
+  ctx.moveTo(0, uy(1768));
+  for (let x = 0; x <= DESIGN_W; x += 56) {
+    ctx.lineTo(ux(x), uy(1784 + ((x / 56) % 3) * 10));
+  }
+  ctx.lineTo(W, uy(1994));
+  ctx.lineTo(0, uy(1994));
+  ctx.closePath();
+  ctx.clip();
+  for (let x = 0; x < DESIGN_W; x += 180) {
+    ctx.drawImage(scene, 900, 950, 180, 120, ux(x), uy(1760), ux(200), uy(250));
+  }
+  ctx.restore();
+}
 function drawFirstPersonFishingRig(points) {
   const rod = activeRod();
   const dx = points.tipX - points.baseX;
@@ -1964,8 +2005,7 @@ function drawPsdSceneOverlays() {
     drawRect(ux(80), uy(1160), ux(900), uy(58), 'rgba(230,236,238,.18)');
   }
   drawFirstPersonScenePatch();
-  clearRightBankToWater();
-  drawFirstPersonShoreForeground();
+  drawSceneTextureRepaint();
   const points = firstPersonPoints();
   drawFirstPersonFishingRig(points);
   if (state.phase === 'hooked') drawLayoutAsset('event_alert', 862, 902, 156, 168);
