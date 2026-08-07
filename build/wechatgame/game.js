@@ -1103,6 +1103,14 @@ function activeRod() {
   if (selected) return selected;
   return ownedRodList().filter((r) => RODS.some((base) => base.id === r.id)).pop() || RODS[0];
 }
+function rodGlowTier(rod) {
+  if (!rod) return 0;
+  if (GACHA_RODS.some((item) => item.id === rod.id)) return 3;
+  if ((rod.threshold || 0) >= 28) return 3;
+  if ((rod.threshold || 0) >= 15) return 2;
+  if ((rod.threshold || 0) >= 8) return 1;
+  return 0;
+}
 function nextRod() {
   const dexCount = Object.keys(user.dex).length;
   return RODS.find((r) => !user.ownedRods.includes(r.id) && dexCount >= r.threshold)
@@ -1934,6 +1942,23 @@ function drawSceneTextureRepaint() {
   }
   ctx.restore();
 }
+function drawRodShowcase(rod) {
+  const tier = rodGlowTier(rod);
+  const x = ux(165);
+  const y = uy(2200);
+  const w = ux(750);
+  const h = uy(108);
+  const glow = tier >= 3 ? rod.hi || '#ffd700' : tier === 2 ? rod.hi || '#ffd54f' : '#8bc7d7';
+  if (tier > 0) {
+    ctx.save();
+    ctx.globalAlpha = tier === 1 ? .28 : tier === 2 ? .42 : .58;
+    drawRect(x + ux(24), y + uy(24), w - ux(48), uy(6), glow);
+    drawRect(x + ux(48), y + uy(82), w - ux(96), uy(4), glow);
+    ctx.restore();
+    if (tier >= 2) drawPixelSparkles(x + ux(20), y + uy(10), w - ux(40), h - uy(20), Math.floor(Date.now() / 260), glow);
+  }
+  drawLayoutAsset('rod_current', 165, 2200, 750, 108);
+}
 function drawFirstPersonFishingRig(points) {
   const rod = activeRod();
   const dx = points.tipX - points.baseX;
@@ -2119,7 +2144,7 @@ function drawGamebar() {
   drawPixelPanel(ux(278), uy(2122), ux(524), uy(52), '#263f5b', '#172536', '#87c7e8');
   drawFittedText(`次数 ${user.chances.left}/${user.chances.max} · ${rankBrief}`, ux(540), uy(2148), us(22), '#eaf7ff', 'center', ux(486));
   // The horizontal rod is a bottom showcase, separated from every interactive control.
-  drawLayoutAsset('rod_current', 190, 2200, 700, 100);
+  drawRodShowcase(rod);
 }
 function drawHitbar() {
   if (!hb.active) return;
