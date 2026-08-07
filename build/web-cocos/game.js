@@ -1831,6 +1831,68 @@ function drawFirstPersonScenePatch() {
   [826, 888, 950, 1012].forEach((x) => drawRect(ux(x), uy(1217), ux(13), uy(68), '#6f452d', '#4a2b1c'));
   [836, 898, 960, 1022].forEach((x) => drawRect(ux(x), uy(1234), ux(52), uy(4), 'rgba(255,214,142,.32)'));
 }
+function drawFirstPersonShoreForeground() {
+  const top = uy(1770);
+  const bottom = uy(1994);
+  ctx.fillStyle = '#466d3c';
+  ctx.beginPath();
+  ctx.moveTo(0, top + uy(24));
+  for (let x = 0; x <= DESIGN_W; x += 54) {
+    const ridge = 18 + ((x / 54) % 3) * 8;
+    ctx.lineTo(ux(x), top + uy(ridge));
+  }
+  ctx.lineTo(W, bottom);
+  ctx.lineTo(0, bottom);
+  ctx.closePath();
+  ctx.fill();
+  drawRect(0, top + uy(54), W, bottom - top - uy(54), '#314d32');
+  drawRect(0, top + uy(54), W, uy(8), '#6f9d4b');
+  for (let i = 0; i < 42; i += 1) {
+    const x = ux((i * 67 + 18) % DESIGN_W);
+    const y = top + uy(70 + ((i * 31) % 134));
+    const color = i % 3 === 0 ? '#8fb95d' : i % 3 === 1 ? '#5e9147' : '#263d2b';
+    drawRect(x, y, ux(i % 2 ? 12 : 8), uy(4), color);
+    if (i % 4 === 0) drawRect(x + ux(5), y - uy(12), ux(4), uy(14), color);
+  }
+}
+function clearRightBankToWater() {
+  ctx.fillStyle = '#39addb';
+  ctx.beginPath();
+  ctx.moveTo(W, uy(980));
+  ctx.lineTo(W, uy(1210));
+  ctx.lineTo(ux(950), uy(1210));
+  ctx.lineTo(ux(910), uy(1170));
+  ctx.lineTo(ux(890), uy(1124));
+  ctx.lineTo(ux(918), uy(1070));
+  ctx.lineTo(ux(970), uy(1024));
+  ctx.closePath();
+  ctx.fill();
+  for (let i = 0; i < 12; i += 1) {
+    drawRect(ux(908 + (i * 23) % 154), uy(1014 + (i * 29) % 164), ux(26 + (i % 3) * 15), uy(5), i % 2 ? 'rgba(186,236,245,.42)' : 'rgba(25,139,190,.34)');
+  }
+  ctx.fillStyle = '#3b97cf';
+  ctx.beginPath();
+  ctx.moveTo(ux(1080), uy(1326));
+  ctx.lineTo(W, uy(1510));
+  ctx.lineTo(ux(1000), uy(1494));
+  ctx.lineTo(ux(1018), uy(1448));
+  ctx.lineTo(ux(1008), uy(1396));
+  ctx.closePath();
+  ctx.fill();
+  drawRect(ux(1014), uy(1418), ux(44), uy(5), 'rgba(185,235,244,.46)');
+  drawRect(ux(982), uy(1470), ux(60), uy(6), 'rgba(185,235,244,.34)');
+  ctx.fillStyle = '#3b97cf';
+  ctx.beginPath();
+  ctx.moveTo(ux(978), uy(1302));
+  ctx.lineTo(W, uy(1288));
+  ctx.lineTo(W, uy(1530));
+  ctx.lineTo(ux(960), uy(1510));
+  ctx.lineTo(ux(986), uy(1438));
+  ctx.closePath();
+  ctx.fill();
+  drawRect(ux(1000), uy(1342), ux(58), uy(5), 'rgba(185,235,244,.38)');
+  drawRect(ux(1018), uy(1392), ux(34), uy(5), 'rgba(25,139,190,.30)');
+}
 function drawFirstPersonFishingRig(points) {
   const rod = activeRod();
   const dx = points.tipX - points.baseX;
@@ -1902,6 +1964,8 @@ function drawPsdSceneOverlays() {
     drawRect(ux(80), uy(1160), ux(900), uy(58), 'rgba(230,236,238,.18)');
   }
   drawFirstPersonScenePatch();
+  clearRightBankToWater();
+  drawFirstPersonShoreForeground();
   const points = firstPersonPoints();
   drawFirstPersonFishingRig(points);
   if (state.phase === 'hooked') drawLayoutAsset('event_alert', 862, 902, 156, 168);
