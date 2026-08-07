@@ -1544,25 +1544,38 @@ function drawRect(x, y, w, h, color, stroke) {
   }
 }
 function drawText(text, x, y, size, color, align = 'left') {
-  ctx.font = `${size}px monospace`;
+  const px = Math.round(x);
+  const py = Math.round(y);
+  const fontSize = Math.max(10, Math.round(size));
+  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'miter';
+  if (fontSize >= 14) {
+    ctx.lineWidth = Math.max(1, Math.round(fontSize * .07));
+    ctx.strokeStyle = 'rgba(18, 13, 18, .68)';
+    ctx.strokeText(String(text), px, py);
+  }
   ctx.fillStyle = color;
-  ctx.fillText(String(text), x, y);
+  ctx.fillText(String(text), px, py);
 }
 function drawOutlinedText(text, x, y, size, color, align = 'left', stroke = '#2a1b19') {
-  ctx.font = `${size}px monospace`;
+  const px = Math.round(x);
+  const py = Math.round(y);
+  const fontSize = Math.max(10, Math.round(size));
+  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.lineWidth = Math.max(2, Math.round(size * .14));
+  ctx.lineWidth = Math.max(2, Math.round(fontSize * .14));
   ctx.strokeStyle = stroke;
-  ctx.strokeText(String(text), x, y);
+  ctx.strokeText(String(text), px, py);
   ctx.fillStyle = color;
-  ctx.fillText(String(text), x, y);
+  ctx.fillText(String(text), px, py);
 }
 function fitText(text, maxWidth, size) {
   const raw = String(text);
-  ctx.font = `${size}px monospace`;
+  const fontSize = Math.max(10, Math.round(size));
+  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
   if (!maxWidth || ctx.measureText(raw).width <= maxWidth) return raw;
   let value = raw;
   while (value.length > 1 && ctx.measureText(value + '…').width > maxWidth) value = value.slice(0, -1);
@@ -1664,7 +1677,7 @@ function fishAssetKey(item) {
 }
 function drawButton(id, label, x, y, w, h, active, data, asset) {
   drawRect(x, y, w, h, active ? '#ffd700' : '#2c3e50', '#ffd700');
-  const font = W <= 380 ? 9 : 11;
+  const font = W <= 380 ? 11 : 12;
   if (asset && w >= 58 && drawAsset(asset, x + 5, y + Math.max(4, (h - 18) / 2), 18, 18)) {
     drawFittedText(label, x + w / 2 + 8, y + h / 2, font, active ? '#1a1a2e' : '#ffd700', 'center', w - 30);
   } else {
@@ -1678,7 +1691,7 @@ function drawOriginalButton(id, icon, label, x, y, w, h, active, data, variant) 
   const fg = active ? '#1a1a2e' : (variant === 'vip' ? '#66e6ff' : '#ffd700');
   drawRect(x, y, w, h, bg, stroke);
   const full = icon ? `${icon} ${label}` : label;
-  drawFittedText(full, x + w / 2, y + h / 2, W <= 380 ? 9 : 11, fg, 'center', w - 10);
+  drawFittedText(full, x + w / 2, y + h / 2, W <= 380 ? 11 : 12, fg, 'center', w - 14);
   addTarget(id, x, y, w, h, data);
 }
 function drawTopbar() {
