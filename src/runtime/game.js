@@ -1995,15 +1995,15 @@ function drawGamebar() {
     drawPixelPanel(ux(114), uy(1945), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
   addLayoutTarget('baitnext', 88, 1918, 210, 220);
-  if (!drawLayoutAsset('button_tackle', 895, 1925, 150, 167)) {
-    drawPixelPanel(ux(895), uy(1925), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
+  if (!drawLayoutAsset('button_tackle', 816, 1925, 150, 167)) {
+    drawPixelPanel(ux(816), uy(1925), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
-  addLayoutTarget('rodnext', 850, 1918, 215, 220);
+  addLayoutTarget('rodnext', 782, 1918, 210, 220);
   drawLayoutAsset('rod_current', 345, 2016, 623, 89);
   drawAsset('bait_' + user.currentBait, ux(136), uy(1962), ux(76), uy(76));
   drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
-  drawAsset('rod_' + rod.id, ux(928), uy(1980), ux(84), uy(84));
-  drawFittedText(rod.name, ux(970), uy(1926), us(24), '#fff1a8', 'center', ux(150));
+  drawAsset('rod_' + rod.id, ux(849), uy(1980), ux(84), uy(84));
+  drawFittedText(rod.name, ux(891), uy(1926), us(24), '#fff1a8', 'center', ux(150));
   drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
   drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
   drawRect(ux(242), uy(1643), ux(94), uy(30), '#c58b49', '#5a341d');
