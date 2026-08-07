@@ -1752,7 +1752,20 @@ function drawProfilePanel() {
   drawRect(x + ux(142), y + uy(147), ux(210 * exp), uy(4), 'rgba(255,255,255,.35)');
 }
 function drawMenuAsset(key, id, x, y, w, h, data) {
-  if (!drawLayoutAsset(key, x, y, w, h)) {
+  let drawn = false;
+  if (key === 'menu_collection') {
+    const image = IMAGES.ui_layout_menu_collection;
+    if (image && image.ready) {
+      try {
+        // Crop the exported white bleed around the aquarium while keeping the label.
+        ctx.drawImage(image, 6, 4, Math.max(1, image.width - 12), Math.max(1, image.height - 7), ux(x), uy(y), ux(w), uy(h));
+        drawn = true;
+      } catch (_) {}
+    }
+  } else {
+    drawn = drawLayoutAsset(key, x, y, w, h);
+  }
+  if (!drawn) {
     drawPixelPanel(ux(x), uy(y), ux(w), uy(h), '#7b4a33', '#2a1b19', '#d29a5a');
   }
   addLayoutTarget(id, x, y, w, h, data);
@@ -1767,8 +1780,8 @@ function drawMainHud() {
   drawMenuAsset('menu_task', 'top:task', 42, 790, 113, 123);
   drawMenuAsset('menu_dex', 'top:dex', 45, 949, 107, 126);
   drawMenuAsset('menu_more', 'top:weather', 48, 1112, 103, 79);
-  drawMenuAsset('menu_collection', 'top:dex', 846, 309, 186, 153);
-  drawMenuAsset('menu_idle', 'toggleauto', 864, 499, 151, 143);
+  drawMenuAsset('menu_collection', 'top:dex', 866, 322, 148, 122);
+  drawMenuAsset('menu_idle', 'toggleauto', 878, 505, 126, 120);
   const counts = dailyGoalCounts();
   if (counts.claimable) {
     drawRect(ux(132), uy(782), ux(38), uy(38), '#d82f2f', '#fff1a8');
@@ -1982,15 +1995,15 @@ function drawGamebar() {
     drawPixelPanel(ux(114), uy(1945), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
   addLayoutTarget('baitnext', 88, 1918, 210, 220);
-  if (!drawLayoutAsset('button_tackle', 895, 1773, 150, 174)) {
-    drawPixelPanel(ux(895), uy(1773), ux(150), uy(174), '#7b4a33', '#2a1b19', '#d29a5a');
+  if (!drawLayoutAsset('button_tackle', 895, 1925, 150, 167)) {
+    drawPixelPanel(ux(895), uy(1925), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
-  addLayoutTarget('rodnext', 850, 1746, 215, 230);
+  addLayoutTarget('rodnext', 850, 1918, 215, 220);
   drawLayoutAsset('rod_current', 345, 2016, 623, 89);
   drawAsset('bait_' + user.currentBait, ux(136), uy(1962), ux(76), uy(76));
   drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
-  drawAsset('rod_' + rod.id, ux(802), uy(1998), ux(72), uy(72));
-  drawFittedText(rod.name, ux(834), uy(1980), us(24), '#fff1a8', 'center', ux(206));
+  drawAsset('rod_' + rod.id, ux(928), uy(1980), ux(84), uy(84));
+  drawFittedText(rod.name, ux(970), uy(1926), us(24), '#fff1a8', 'center', ux(150));
   drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
   drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
   drawRect(ux(242), uy(1643), ux(94), uy(30), '#c58b49', '#5a341d');
@@ -2496,6 +2509,15 @@ function handleTap(x, y) {
   }
   if (!modal && state.phase === 'hooked') startHitbar();
 }
+function handleQtePress(x, y) {
+  if (state.phase !== 'reeling') return false;
+  const target = targets.slice().reverse().find((t) => hitTarget(x, y, t));
+  if (!target || (target.id !== 'hit' && target.id !== 'mobile-action')) return false;
+  startBgm('tap');
+  playActionSfx(target);
+  handleAction(target);
+  return true;
+}
 function handleAction(t) {
   if (t.id.startsWith('top:')) {
     const type = t.id.slice(4);
@@ -2695,7 +2717,16 @@ function handleAction(t) {
     loadRank(rankScope);
   }
 }
+let qteTouchPressed = false;
+wx.onTouchStart((event) => {
+  const touch = event.touches && event.touches[0];
+  if (touch) qteTouchPressed = handleQtePress(touch.clientX, touch.clientY);
+});
 wx.onTouchEnd((event) => {
+  if (qteTouchPressed) {
+    qteTouchPressed = false;
+    return;
+  }
   const touch = event.changedTouches && event.changedTouches[0];
   if (touch) handleTap(touch.clientX, touch.clientY);
 });
