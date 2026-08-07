@@ -1547,7 +1547,7 @@ function drawText(text, x, y, size, color, align = 'left') {
   const px = Math.round(x);
   const py = Math.round(y);
   const fontSize = Math.max(10, Math.round(size));
-  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
+  ctx.font = `600 ${fontSize}px "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'miter';
@@ -1563,7 +1563,7 @@ function drawOutlinedText(text, x, y, size, color, align = 'left', stroke = '#2a
   const px = Math.round(x);
   const py = Math.round(y);
   const fontSize = Math.max(10, Math.round(size));
-  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
+  ctx.font = `600 ${fontSize}px "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineWidth = Math.max(2, Math.round(fontSize * .14));
@@ -1575,7 +1575,7 @@ function drawOutlinedText(text, x, y, size, color, align = 'left', stroke = '#2a
 function fitText(text, maxWidth, size) {
   const raw = String(text);
   const fontSize = Math.max(10, Math.round(size));
-  ctx.font = `600 ${fontSize}px "Noto Sans Mono CJK SC", monospace`;
+  ctx.font = `600 ${fontSize}px "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
   if (!maxWidth || ctx.measureText(raw).width <= maxWidth) return raw;
   let value = raw;
   while (value.length > 1 && ctx.measureText(value + '…').width > maxWidth) value = value.slice(0, -1);
@@ -1583,6 +1583,12 @@ function fitText(text, maxWidth, size) {
 }
 function drawFittedText(text, x, y, size, color, align, maxWidth) {
   drawText(fitText(text, maxWidth, size), x, y, size, color, align);
+}
+function buttonFrame(id, y, h) {
+  if (id === 'modal:close') return { y, h };
+  const compact = /tab$/.test(id) || id === 'shoptab' || id === 'fishdextab' || id === 'ranktab';
+  const targetH = compact ? 32 : 36;
+  return { y: y + (h - targetH) / 2, h: targetH };
 }
 function compactNumber(value) {
   const n = Math.max(0, Math.floor(Number(value) || 0));
@@ -1676,6 +1682,9 @@ function fishAssetKey(item) {
   return 'fish_' + item.id;
 }
 function drawButton(id, label, x, y, w, h, active, data, asset) {
+  const frame = buttonFrame(id, y, h);
+  y = frame.y;
+  h = frame.h;
   drawRect(x, y, w, h, active ? '#ffd700' : '#2c3e50', '#ffd700');
   const font = W <= 380 ? 11 : 12;
   if (asset && w >= 58 && drawAsset(asset, x + 5, y + Math.max(4, (h - 18) / 2), 18, 18)) {
@@ -1705,6 +1714,7 @@ function drawResourcePill(x, y, value, iconColor) {
   const isCoin = iconColor === '#f8c247';
   drawRect(px + ux(22), py + uy(8), pw - ux(42), ph - uy(6), 'rgba(35,20,13,.55)');
   drawPixelPanel(px + ux(18), py + uy(2), pw - ux(40), ph - uy(2), '#704327', '#201311', '#e2aa5d');
+  drawRect(px + ux(72), py + uy(14), ux(142), uy(40), '#704327');
   drawRect(px + ux(14), py + uy(10), ux(48), uy(48), iconColor, '#4b2a18');
   drawRect(px + ux(19), py + uy(15), ux(38), uy(8), 'rgba(255,255,255,.35)');
   drawText(isCoin ? '金' : '钻', px + ux(38), py + uy(34), us(20), isCoin ? '#6a390f' : '#425066', 'center');
@@ -1726,8 +1736,10 @@ function drawProfilePanel() {
   drawRect(x + ux(18), y + uy(110), ux(116), uy(24), 'rgba(0,0,0,.36)');
   drawText(user.province, x + ux(76), y + uy(122), us(17), '#f6ffd5', 'center');
   drawPixelPanel(x + ux(150), y + uy(16), ux(250), uy(56), '#3c2824', '#201311', '#c58b49');
+  drawRect(x + ux(158), y + uy(26), ux(232), uy(36), '#3c2824');
   drawFittedText(user.username, x + ux(168), y + uy(44), us(23), '#fff1a8', 'left', ux(210));
   drawPixelPanel(x + ux(150), y + uy(80), ux(250), uy(52), '#253b4d', '#18242d', '#7fb6d9');
+  drawRect(x + ux(210), y + uy(89), ux(180), uy(34), '#253b4d');
   drawRect(x + ux(164), y + uy(93), ux(42), uy(26), '#d9a64f', '#5a341d');
   drawText('ID', x + ux(185), y + uy(106), us(18), '#3d2818', 'center');
   drawFittedText(shortPlayerId(user.username), x + ux(216), y + uy(106), us(18), '#ffffff', 'left', ux(166));
@@ -1982,6 +1994,7 @@ function drawGamebar() {
   drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
   drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
   drawRect(ux(242), uy(1643), ux(94), uy(30), '#c58b49', '#5a341d');
+  drawRect(ux(346), uy(1640), ux(492), uy(36), '#23384d');
   drawText('鱼讯', ux(289), uy(1658), us(19), '#3d2818', 'center');
   drawFittedText(`${env.season.name}${env.weather.name} · ${status}`, ux(604), uy(1658), us(23), '#e9ffd5', 'center', ux(486));
   const rankBrief = rankScope === 'provinceWar'
