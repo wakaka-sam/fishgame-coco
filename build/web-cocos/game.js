@@ -2029,8 +2029,6 @@ function drawPsdSceneOverlays() {
     drawRect(ux(32), uy(760), ux(1016), uy(72), 'rgba(230,236,238,.22)');
     drawRect(ux(80), uy(1160), ux(900), uy(58), 'rgba(230,236,238,.18)');
   }
-  drawFirstPersonScenePatch();
-  drawSceneTextureRepaint();
   const points = firstPersonPoints();
   drawFirstPersonFishingRig(points);
   if (state.phase === 'hooked') drawLayoutAsset('event_alert', 862, 902, 156, 168);
