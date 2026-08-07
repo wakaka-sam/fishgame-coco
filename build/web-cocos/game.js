@@ -2000,11 +2000,8 @@ function drawGamebar() {
     drawPixelPanel(ux(816), uy(1925), ux(150), uy(167), '#7b4a33', '#2a1b19', '#d29a5a');
   }
   addLayoutTarget('rodnext', 782, 1918, 210, 220);
-  drawLayoutAsset('rod_current', 345, 2016, 623, 89);
   drawAsset('bait_' + user.currentBait, ux(136), uy(1962), ux(76), uy(76));
   drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
-  // Keep the rod preview below the equipment button so the button remains readable.
-  drawAsset('rod_' + rod.id, ux(811), uy(2075), ux(160), uy(160));
   drawFittedText(rod.name, ux(891), uy(1926), us(24), '#fff1a8', 'center', ux(150));
   drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
   drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
@@ -2017,6 +2014,8 @@ function drawGamebar() {
     : `${rankLabel(rankScope)} ${user.ranking.bestScore || 0}`;
   drawPixelPanel(ux(278), uy(2122), ux(524), uy(52), '#263f5b', '#172536', '#87c7e8');
   drawFittedText(`次数 ${user.chances.left}/${user.chances.max} · ${rankBrief}`, ux(540), uy(2148), us(22), '#eaf7ff', 'center', ux(486));
+  // The horizontal rod is a bottom showcase, separated from every interactive control.
+  drawLayoutAsset('rod_current', 190, 2200, 700, 100);
 }
 function drawHitbar() {
   if (!hb.active) return;
