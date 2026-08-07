@@ -2003,7 +2003,8 @@ function drawGamebar() {
   drawLayoutAsset('rod_current', 345, 2016, 623, 89);
   drawAsset('bait_' + user.currentBait, ux(136), uy(1962), ux(76), uy(76));
   drawFittedText(`${bait.name} x${user.baits[user.currentBait] || 0}`, ux(189), uy(1926), us(24), '#fff1a8', 'center', ux(184));
-  drawAsset('rod_' + rod.id, ux(849), uy(1980), ux(84), uy(84));
+  // Keep the rod preview below the equipment button so the button remains readable.
+  drawAsset('rod_' + rod.id, ux(811), uy(2075), ux(160), uy(160));
   drawFittedText(rod.name, ux(891), uy(1926), us(24), '#fff1a8', 'center', ux(150));
   drawRect(ux(210), uy(1618), ux(660), uy(78), 'rgba(22,18,14,.40)');
   drawPixelPanel(ux(224), uy(1626), ux(632), uy(64), '#23384d', '#172536', '#87c7e8');
